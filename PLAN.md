@@ -123,8 +123,8 @@ and backed by Postgres RLS policies as a second line.
 - [x] Signup (creates org + owner user), login, logout; argon2 hashing; httpOnly session cookie.
 - [x] Auth extractor that yields `(user, org_id)`; org-scoped repository layer. *(RLS policies still open — see Open Questions.)*
 - [x] Next.js app shell: login/signup pages, authenticated layout, nav, empty dashboard.
-- [ ] Railway project: Postgres, api service, web service; env config; deploy.
-- [x] **Verify (local only):** signup → login → dashboard confirmed in a browser; cross-org isolation covered by tests (`separate_signups_get_separate_orgs`, and the mailbox/lead isolation tests in Phase 2). *Not yet confirmed on a live Railway URL — nothing is deployed.*
+- [x] Railway project `cold-email-campaigns`: Postgres plus four services — `api`, `worker`, `scheduler`, `web`. Deployed from the local checkout with `railway up <dir> --path-as-root`; without that flag the CLI uploads the whole monorepo and the builder cannot identify an app. Postgres is private-networking only.
+- [x] **Verify (live):** signup → session → dashboard confirmed against https://web-production-c97a8.up.railway.app, with the session cookie `HttpOnly` and `Secure`. Worker and scheduler both start and tick in production. Cross-org isolation is covered by tests.
 
 ### Phase 2 — Mailboxes & Leads
 - [x] `MailProvider` trait (`send`, `fetch_messages`, `refresh_auth`) + `GmailProvider`.
@@ -193,6 +193,8 @@ in-memory fake:
 | Unsubscribe link through a real mail client | **not verified** |
 | SPF/DKIM/DMARC, spam placement | **not verified** |
 | Invite created, accepted, role enforced | live |
+| Production deploy: signup, session, background services | live |
+| Production Gmail connect | **blocked — redirect URI not yet whitelisted** |
 | Rate limit, invalid recipient, mid-send revocation | **tests only** |
 
 ## Open Questions
