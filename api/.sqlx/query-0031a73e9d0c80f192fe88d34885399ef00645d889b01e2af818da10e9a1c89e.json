@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        insert into campaign_leads (campaign_id, lead_id, current_step, next_run_at)\n        select $1, l.id, 0, now()\n        from leads l\n        where l.list_id = $2\n          and l.org_id = $3\n          and l.status = 'active'\n          and not exists (\n              select 1 from suppressions s\n              where s.org_id = l.org_id and lower(s.email) = lower(l.email)\n          )\n        on conflict (campaign_id, lead_id) do nothing\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0031a73e9d0c80f192fe88d34885399ef00645d889b01e2af818da10e9a1c89e"
+}

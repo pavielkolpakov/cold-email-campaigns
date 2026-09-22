@@ -1,0 +1,208 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select\n            c.org_id,\n            c.mailbox_id,\n            m.email       as mailbox_email,\n            m.daily_cap,\n            l.email       as lead_email,\n            l.unsubscribe_token,\n            l.first_name,\n            l.last_name,\n            l.company,\n            l.custom,\n            cl.current_step,\n            cl.thread_id,\n            s.id          as step_id,\n            s.position,\n            s.subject,\n            s.body\n        from campaign_leads cl\n        join campaigns c on c.id = cl.campaign_id\n        join mailboxes m on m.id = c.mailbox_id\n        join leads l on l.id = cl.lead_id\n        join sequence_steps s\n          on s.sequence_id = c.sequence_id and s.position = cl.current_step\n        where cl.id = $1\n          and cl.status = 'pending'\n          and c.status = 'running'\n          and m.status = 'active'\n          and not exists (\n              select 1 from suppressions sup\n              where sup.org_id = c.org_id and lower(sup.email) = lower(l.email)\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "campaigns",
+            "name": "org_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "campaigns",
+            "name": "mailbox_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "mailbox_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "daily_cap",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "daily_cap"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "lead_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "unsubscribe_token",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "unsubscribe_token"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "first_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "last_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "company",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "company"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "custom",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "custom"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "current_step",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "current_step"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "thread_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "thread_id"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "step_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sequence_steps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "position",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "sequence_steps",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "subject",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "sequence_steps",
+            "name": "subject"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "sequence_steps",
+            "name": "body"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ce9454fa046e7414d8b8cfe72b3972026cf131963d0a0a8ba5632bf99ee5ae77"
+}

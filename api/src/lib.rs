@@ -1,10 +1,14 @@
 pub mod auth;
+pub mod campaigns;
 pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod leads;
 pub mod mailboxes;
 pub mod provider;
+pub mod render;
+pub mod sequences;
+pub mod suppressions;
 pub mod routes;
 pub mod scheduler;
 pub mod state;

@@ -137,15 +137,15 @@ and backed by Postgres RLS policies as a second line.
 - [ ] **Verify:** connect a real Gmail account, send a test email to yourself, import a 100-row CSV with a custom column and see it on the lead detail page.
 
 ### Phase 3 — Sequences & Sending
-- [ ] Sequence CRUD; step editor with subject/body, delay in days, reorder.
-- [ ] Merge-tag renderer with fallbacks; live preview against a sample lead; validation rejects unknown tags at save time.
-- [ ] Suppression list + unsubscribe token route; every send checks it. *(Pulled forward from polish — it is a legal requirement, not a nicety.)*
-- [ ] Campaign create/launch: snapshot lead list into `campaign_leads`, set step 0 `next_run_at`.
-- [ ] Scheduler mode: poll for due `campaign_leads`, insert `send` jobs, honour pause.
-- [ ] Worker mode: claim with `FOR UPDATE SKIP LOCKED` + lease, render, enforce daily cap / business-hours window / random jitter, send via provider, write `messages` + `events`, advance to next step.
-- [ ] Retry with exponential backoff; permanent vs transient error classification; stale-lease requeue.
-- [ ] Campaign detail UI: status, progress, pause/resume, per-lead state.
-- [ ] **Verify:** a 3-step sequence to a handful of seed inboxes sends step 1 immediately and steps 2–3 at the configured delays, never exceeding the daily cap, never outside the window; killing the worker mid-run loses no jobs.
+- [x] Sequence CRUD; step editor with subject/body, delay in days, reorder.
+- [x] Merge-tag renderer with fallbacks. *(Rendering refuses at send time when a tag has no value and no fallback, rather than validating at save — the lead data is what decides, and it is not known when the sequence is written. Live preview deferred.)*
+- [x] Suppression list + unsubscribe token route; every send checks it. *(Pulled forward from polish — it is a legal requirement, not a nicety.)*
+- [x] Campaign create/launch: snapshot lead list into `campaign_leads`, set step 0 `next_run_at`.
+- [x] Scheduler mode: poll for due `campaign_leads`, insert `send` jobs, honour pause.
+- [x] Worker mode: claim with `FOR UPDATE SKIP LOCKED`, render, enforce daily cap, send via provider, write `messages`, advance to next step. *(Business-hours window and random jitter still open — see Open Questions.)*
+- [x] Retry with exponential backoff; permanent vs transient error classification. *(Stale-lease requeue still open.)*
+- [x] Campaign detail UI: status, stats, launch/pause/resume. *(Per-lead drill-down deferred.)*
+- [ ] **Verify (needs a connected mailbox):** a 3-step sequence to a handful of seed inboxes sends step 1 immediately and steps 2–3 at the configured delays, never exceeding the daily cap, never outside the window; killing the worker mid-run loses no jobs.
 
 ### Phase 4 — Reply Detection
 - [ ] Gmail history sync per mailbox, cursor persisted; enqueued by the scheduler on an interval.
@@ -172,6 +172,9 @@ and backed by Postgres RLS policies as a second line.
 - **Lead timezone source.** Business-hours sending needs a timezone per lead. Options: a CSV column, inference from country, or falling back to the mailbox's timezone. v1 falls back to the mailbox; revisit if it matters.
 - **Reply matching without thread IDs.** Fine for Gmail. When SMTP/IMAP lands, matching will need `Message-ID` / `References` header tracking — worth keeping those columns on `messages` from the start.
 - **Open tracking.** Deliberately out of v1: tracking pixels hurt deliverability and Apple Mail Privacy Protection makes open rates close to meaningless. Revisit only if a customer demands the number.
+- **Business-hours window and jitter are not implemented.** The worker sends as soon as a job is claimed. Both need a timezone to be meaningful, and the lead timezone question below is still open; doing it against the mailbox timezone alone is a half-measure worth deciding on deliberately.
+- **Stale-lease requeue is missing.** A worker killed mid-send leaves its job `running` forever. A sweeper that returns jobs locked longer than N minutes to `pending` is a few lines, but needs a lease window chosen against real send latency.
+- **The daily cap counts sends across the whole day, not a rolling window,** and resets at UTC midnight rather than the mailbox's local midnight.
 - **Postgres RLS.** Still unimplemented. `force row level security` does not apply to superusers, and the local/Railway Postgres role is one, so enforcing it needs a separate non-superuser app role (migrations as owner, runtime as `app`) and a second test pool. Org scoping is currently enforced in the repository layer and covered by tests; decide before Phase 3 whether the second line of defence is worth that plumbing.
 - **Import writes one row per query.** Fine for the list sizes seen so far; becomes the bottleneck somewhere in the thousands. Batch inserts when it shows up in practice, not before.
 - **A lead belongs to exactly one list.** `leads` carries `list_id` and is unique per org, so importing the same address into a second list reports it as a duplicate rather than adding it twice. If a prospect needs to sit in several lists, that becomes a join table.

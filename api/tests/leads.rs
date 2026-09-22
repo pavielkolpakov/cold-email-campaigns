@@ -125,3 +125,29 @@ async fn leads_and_lists_do_not_cross_org_boundaries(pool: PgPool) {
     );
     assert_eq!(leads::list(&pool, acme, acme_list).await.unwrap().len(), 1);
 }
+
+#[sqlx::test]
+async fn an_imported_lead_exposes_every_column_as_a_merge_value(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let list_id = seed_list(&pool, org_id).await;
+
+    let csv = "Email,First,Last,Company,Title\n\
+               ada@example.com,Ada,Lovelace,Analytical Engines,CTO\n";
+    leads::import_csv(&pool, org_id, list_id, csv.as_bytes(), &mapping())
+        .await
+        .unwrap();
+
+    let lead = leads::list(&pool, org_id, list_id).await.unwrap().remove(0);
+    let values = lead.merge_values();
+
+    let rendered = api::render::render(
+        "Hi {{first_name}} ({{Title}}) at {{company}} — {{email}}",
+        &values,
+    )
+    .unwrap();
+
+    assert_eq!(
+        rendered,
+        "Hi Ada (CTO) at Analytical Engines — ada@example.com"
+    );
+}

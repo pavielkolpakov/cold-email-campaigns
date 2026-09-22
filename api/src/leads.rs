@@ -1,6 +1,8 @@
 use anyhow::{Result, anyhow};
 use serde_json::{Map, Value};
 use sqlx::PgPool;
+
+use crate::render::MergeValues;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -43,6 +45,32 @@ pub struct RowError {
     /// 1-based, counting the header as row 1, so it matches what a spreadsheet shows.
     pub row: usize,
     pub message: String,
+}
+
+impl Lead {
+    /// Everything a template may reference: the mapped fields under stable snake
+    /// case names, plus each custom column under the header the CSV used.
+    pub fn merge_values(&self) -> MergeValues {
+        let mut values = MergeValues::default();
+        values.insert("email", self.email.clone());
+        for (key, value) in [
+            ("first_name", &self.first_name),
+            ("last_name", &self.last_name),
+            ("company", &self.company),
+        ] {
+            if let Some(value) = value {
+                values.insert(key, value.clone());
+            }
+        }
+        if let Value::Object(custom) = &self.custom {
+            for (key, value) in custom {
+                if let Value::String(value) = value {
+                    values.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        values
+    }
 }
 
 /// Deliberately permissive: the only address we can truly validate is one that

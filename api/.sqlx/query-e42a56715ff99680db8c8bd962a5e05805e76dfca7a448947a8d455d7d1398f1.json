@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select\n            count(*)                                            as \"total!\",\n            count(*) filter (where status = 'pending')          as \"pending!\",\n            count(*) filter (where status in ('sent', 'finished')) as \"sent!\",\n            count(*) filter (where status = 'replied')          as \"replied!\",\n            count(*) filter (where status = 'bounced')          as \"bounced!\",\n            count(*) filter (where status = 'failed')           as \"failed!\"\n        from campaign_leads\n        where campaign_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "pending!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "sent!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "replied!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "bounced!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "failed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e42a56715ff99680db8c8bd962a5e05805e76dfca7a448947a8d455d7d1398f1"
+}

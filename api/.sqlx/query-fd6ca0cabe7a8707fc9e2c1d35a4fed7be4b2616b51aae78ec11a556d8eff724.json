@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            insert into sequence_steps (sequence_id, position, delay_days, subject, body)\n            values ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd6ca0cabe7a8707fc9e2c1d35a4fed7be4b2616b51aae78ec11a556d8eff724"
+}

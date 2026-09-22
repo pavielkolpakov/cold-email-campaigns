@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        update campaign_leads\n        set status = 'finished', next_run_at = null\n        from leads l\n        where campaign_leads.lead_id = l.id\n          and l.org_id = $1\n          and lower(l.email) = $2\n          and campaign_leads.status = 'pending'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a3bf50847659c2ba04bd2c35c67fd14a7d10c4c648289e05aa54b8e8ca992579"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update leads set status = 'unsubscribed' where org_id = $1 and lower(email) = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "16ef5d92d47a596ac2dd5f7fef3ea4afb4212819870b9a73f1e0fdd1da4e6f04"
+}

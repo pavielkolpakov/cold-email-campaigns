@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select current_step, next_run_at, status, thread_id from campaign_leads where campaign_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current_step",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "current_step"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "next_run_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "thread_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f474c61000fc114128223c33364384819ae7b5d85ca81dc5ed5cd07dbec28b8a"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select s.delay_days\n        from campaign_leads cl\n        join campaigns c on c.id = cl.campaign_id\n        join sequence_steps s\n          on s.sequence_id = c.sequence_id and s.position = $2\n        where cl.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "delay_days",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "sequence_steps",
+            "name": "delay_days"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7121d554bbecca18f96d9c386d1ac8a9718bd6d420d756a9143bba85ac49d3ef"
+}

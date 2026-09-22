@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mailboxes set daily_cap = 2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0215cb34ac09f214c1116c2bff5d9ebc1597057179a527a2b39102337a38e907"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select email from suppressions where org_id = $1 order by created_at desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "suppressions",
+            "name": "email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e0b7f358edee9c0da0542d1b7714ee804a699418637c82b420a9bfe1ea568d9e"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update campaign_leads set next_run_at = now() where status = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ec11562ce18993bcd313f0b2c8e1212e64422517d5f22f6dcfd29dae365c8c95"
+}

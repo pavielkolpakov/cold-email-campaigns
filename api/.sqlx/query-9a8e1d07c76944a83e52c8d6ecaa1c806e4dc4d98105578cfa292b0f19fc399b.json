@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                update campaign_leads\n                set status = 'finished', next_run_at = null, thread_id = coalesce(thread_id, $2)\n                where id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a8e1d07c76944a83e52c8d6ecaa1c806e4dc4d98105578cfa292b0f19fc399b"
+}

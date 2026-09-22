@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update campaigns set status = $1 where id = $2 and org_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39de83f0d817d947bf27abb6ac53ed26ca7067baa3b65f0c0ea49ee38c7c01ee"
+}

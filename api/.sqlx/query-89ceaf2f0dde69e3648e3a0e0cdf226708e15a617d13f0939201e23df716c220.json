@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update campaigns set status = 'running', started_at = coalesce(started_at, now()) where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89ceaf2f0dde69e3648e3a0e0cdf226708e15a617d13f0939201e23df716c220"
+}

@@ -26,3 +26,34 @@ export type ImportReport = {
   duplicates: number;
   errors: { row: number; message: string }[];
 };
+
+export type Sequence = {
+  id: string;
+  name: string;
+};
+
+export type Step = {
+  id: string;
+  position: number;
+  delay_days: number;
+  subject: string;
+  body: string;
+};
+
+export type Campaign = {
+  id: string;
+  name: string;
+  sequence_id: string;
+  list_id: string;
+  mailbox_id: string;
+  status: string;
+};
+
+export type CampaignStats = {
+  total: number;
+  pending: number;
+  sent: number;
+  replied: number;
+  bounced: number;
+  failed: number;
+};

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select count(*) from messages m\n        join campaign_leads cl on cl.id = m.campaign_lead_id\n        join campaigns c on c.id = cl.campaign_id\n        where c.mailbox_id = $1 and m.sent_at >= date_trunc('day', now())\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fa38d9b7e8dc8905e2fddce4e27eafb19bc21c06c626a8a20d19b01b7d4682af"
+}

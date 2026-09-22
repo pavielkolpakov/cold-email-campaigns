@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update campaign_leads set status = 'failed', next_run_at = null, last_error = $2 where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a61194aca2e13d2c8386de241c0332162cbf1bc45d0623633307a1303dffc17"
+}
