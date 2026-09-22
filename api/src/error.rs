@@ -13,6 +13,10 @@ pub enum AppError {
     Unauthorized,
     #[error("{0}")]
     Conflict(String),
+    /// The upstream mail provider refused. Its message is operator-facing and
+    /// usually actionable ("enable the Gmail API"), so it is passed through.
+    #[error("{0}")]
+    Provider(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -29,6 +33,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::InvalidCredentials | AppError::Unauthorized => StatusCode::UNAUTHORIZED,
             AppError::Conflict(_) => StatusCode::CONFLICT,
+            AppError::Provider(_) => StatusCode::BAD_GATEWAY,
             AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

@@ -47,6 +47,10 @@ struct SendJob {
     subject: String,
     body: String,
     thread_id: Option<String>,
+    /// Message-ID and subject of the message that opened this thread, so a
+    /// followup can reply to it rather than start a new conversation.
+    reply_to_message_id: Option<String>,
+    thread_subject: Option<String>,
     merge_values: MergeValues,
 }
 
@@ -191,6 +195,20 @@ async fn load(
         return Ok(None);
     };
 
+    // The opening send of this thread; absent on the first step.
+    let opener = sqlx::query!(
+        r#"
+        select message_id_header, subject
+        from messages
+        where campaign_lead_id = $1
+        order by sent_at
+        limit 1
+        "#,
+        campaign_lead_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
     let lead = crate::leads::Lead {
         id: campaign_lead_id,
         email: row.lead_email.clone(),
@@ -216,6 +234,8 @@ async fn load(
         subject: row.subject,
         body: row.body,
         thread_id: row.thread_id,
+        reply_to_message_id: opener.as_ref().and_then(|m| m.message_id_header.clone()),
+        thread_subject: opener.map(|m| m.subject),
         merge_values: lead.merge_values(),
     }))
 }
@@ -247,20 +267,24 @@ async fn send_one(
     let credentials =
         mailboxes::fresh_credentials(pool, cipher, refresher, job.org_id, job.mailbox_id).await?;
 
+    // A followup has no subject of its own: it reuses the opening one, which is
+    // also what mail clients group on. Resolved once, so the row we store is
+    // what actually went out.
+    let subject = match (subject.is_empty(), &job.thread_subject) {
+        (true, Some(original)) => format!("Re: {original}"),
+        _ => subject,
+    };
+
     let sent = mailer
         .send(
             &job.mailbox_email,
             &credentials,
             &OutboundMessage {
                 to: job.lead_email.clone(),
-                // A followup carries no subject of its own; it replies in thread.
-                subject: if subject.is_empty() {
-                    format!("Re: {}", job.mailbox_email)
-                } else {
-                    subject.clone()
-                },
+                subject: subject.clone(),
                 body: body.clone(),
-                in_reply_to: job.thread_id.clone(),
+                thread_id: job.thread_id.clone(),
+                in_reply_to: job.reply_to_message_id.clone(),
             },
         )
         .await?;
@@ -270,13 +294,15 @@ async fn send_one(
     sqlx::query!(
         r#"
         insert into messages
-            (campaign_lead_id, step_id, provider_message_id, thread_id, subject, body)
-        values ($1, $2, $3, $4, $5, $6)
+            (campaign_lead_id, step_id, provider_message_id, thread_id, message_id_header,
+             subject, body)
+        values ($1, $2, $3, $4, $5, $6, $7)
         "#,
         job.campaign_lead_id,
         job.step_id,
         sent.provider_message_id,
         sent.thread_id,
+        sent.message_id_header,
         subject,
         body,
     )

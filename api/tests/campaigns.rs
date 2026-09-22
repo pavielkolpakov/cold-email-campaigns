@@ -311,7 +311,7 @@ async fn the_followup_replies_inside_the_first_thread(pool: PgPool) {
         .filter(|(_, message)| message.in_reply_to.is_some())
         .collect();
     assert_eq!(followups.len(), 3, "every followup must thread");
-    assert_eq!(followups[0].1.in_reply_to.as_deref(), Some("thread-1"));
+    assert_eq!(followups[0].1.thread_id.as_deref(), Some("thread-1"));
 }
 
 #[sqlx::test]
@@ -506,4 +506,42 @@ async fn every_send_carries_a_working_unsubscribe_link(pool: PgPool) {
             .iter()
             .any(|(_, message)| message.to == "ada@example.com")
     );
+}
+
+#[sqlx::test]
+async fn a_followup_carries_what_gmail_needs_to_thread_it(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    let mailer = FakeMailer::default();
+
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+    work(&pool, &mailer).await;
+    make_everything_due(&pool).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+    work(&pool, &mailer).await;
+
+    let sent = mailer.sent.lock().unwrap();
+    let to_ada: Vec<_> = sent
+        .iter()
+        .filter(|(_, message)| message.to == "ada@example.com")
+        .map(|(_, message)| message)
+        .collect();
+    assert_eq!(to_ada.len(), 2);
+    let (first, followup) = (to_ada[0], to_ada[1]);
+
+    // The opening message starts a thread and must not claim to reply to anything.
+    assert!(first.in_reply_to.is_none());
+    assert!(first.thread_id.is_none());
+
+    // Gmail needs the API thread id *and* the RFC Message-ID of what we are
+    // replying to. The thread id alone silently starts a new conversation.
+    assert_eq!(followup.thread_id.as_deref(), Some("thread-1"));
+    assert_eq!(
+        followup.in_reply_to.as_deref(),
+        Some("<message-id-1@test>"),
+        "In-Reply-To must be the original Message-ID header, not the thread id"
+    );
+
+    // Mail clients also group on subject, so a followup reuses the original.
+    assert_eq!(followup.subject, "Re: Quick question, Ada");
 }

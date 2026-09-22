@@ -26,12 +26,17 @@ pub trait TokenRefresher: Send + Sync {
     async fn refresh(&self, refresh_token: &str) -> Result<RefreshedToken, RefreshError>;
 }
 
-/// A message to send. Followups carry `in_reply_to` so they land in the thread.
+/// A message to send. Threading a followup needs both identifiers: the
+/// provider's own thread handle, and the RFC822 `Message-ID` of the message
+/// being replied to. Gmail silently opens a new conversation without the latter.
 #[derive(Debug, Clone)]
 pub struct OutboundMessage {
     pub to: String,
     pub subject: String,
     pub body: String,
+    /// Provider-side thread handle, e.g. Gmail's `threadId`.
+    pub thread_id: Option<String>,
+    /// `Message-ID` header of the message this replies to.
     pub in_reply_to: Option<String>,
 }
 
@@ -39,6 +44,9 @@ pub struct OutboundMessage {
 pub struct SentMessage {
     pub provider_message_id: String,
     pub thread_id: String,
+    /// The `Message-ID` we stamped on the outgoing mail, kept so the next
+    /// followup can point `In-Reply-To` at it.
+    pub message_id_header: String,
 }
 
 /// Sends on behalf of a connected mailbox. The seam that keeps campaign logic

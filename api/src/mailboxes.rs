@@ -76,8 +76,9 @@ pub async fn credentials(
         mailbox_id,
         org_id,
     )
-    .fetch_one(pool)
-    .await?;
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| anyhow!("mailbox not found"))?;
 
     Ok(Credentials {
         access_token: cipher.decrypt(&record.access_token_enc)?,
@@ -171,8 +172,9 @@ pub async fn send_test_email(
         mailbox_id,
         org_id,
     )
-    .fetch_one(pool)
-    .await?;
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| anyhow!("mailbox not found"))?;
 
     let credentials = fresh_credentials(pool, cipher, refresher, org_id, mailbox_id).await?;
 
@@ -184,6 +186,7 @@ pub async fn send_test_email(
                 to: address.clone(),
                 subject: "Your mailbox is connected".into(),
                 body: "This is a test message confirming the connection works.".into(),
+                thread_id: None,
                 in_reply_to: None,
             },
         )

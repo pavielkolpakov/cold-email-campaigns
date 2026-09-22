@@ -39,9 +39,12 @@ impl Mailer for FakeMailer {
             .lock()
             .unwrap()
             .push((credentials.access_token.clone(), message.clone()));
+
+        let count = self.sent.lock().unwrap().len();
         Ok(SentMessage {
             provider_message_id: format!("msg-{from}"),
             thread_id: "thread-1".into(),
+            message_id_header: format!("<message-id-{count}@test>"),
         })
     }
 }

@@ -197,12 +197,18 @@ impl Mailer for GmailMailer {
             thread_id: String,
         }
 
+        // Stamping our own Message-ID means we know it without re-fetching the
+        // sent message, and the next followup can reference it.
+        let domain = from.split('@').nth(1).unwrap_or("localhost");
+        let message_id = format!("<{}@{domain}>", uuid::Uuid::new_v4());
+
         let mut raw = format!(
-            "From: {from}\r\nTo: {}\r\nSubject: {}\r\n",
+            "From: {from}\r\nTo: {}\r\nSubject: {}\r\nMessage-ID: {message_id}\r\n",
             message.to, message.subject
         );
         if let Some(in_reply_to) = &message.in_reply_to {
-            // Both headers are needed for Gmail to thread the reply correctly.
+            // In-Reply-To alone is not enough for every client; References is
+            // what threads the conversation reliably.
             raw.push_str(&format!(
                 "In-Reply-To: {in_reply_to}\r\nReferences: {in_reply_to}\r\n"
             ));
@@ -210,24 +216,32 @@ impl Mailer for GmailMailer {
         raw.push_str("Content-Type: text/plain; charset=UTF-8\r\n\r\n");
         raw.push_str(&message.body);
 
+        // The API-level thread handle. Gmail needs this *as well as* the
+        // headers above to attach the message rather than start a thread.
+        let mut payload = serde_json::json!({ "raw": BASE64_URL.encode(raw) });
+        if let Some(thread_id) = &message.thread_id {
+            payload["threadId"] = serde_json::Value::String(thread_id.clone());
+        }
+
         let response = self
             .http
             .post(format!("{}/users/me/messages/send", self.api_base))
             .bearer_auth(&credentials.access_token)
-            .json(&serde_json::json!({ "raw": BASE64_URL.encode(raw) }))
+            .json(&payload)
             .send()
             .await?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!("gmail send failed with {status}: {body}"));
+            return Err(anyhow!("gmail send failed ({status}): {}", google_message(&body)));
         }
 
         let sent: SendResponse = response.json().await?;
         Ok(SentMessage {
             provider_message_id: sent.id,
             thread_id: sent.thread_id,
+            message_id_header: message_id,
         })
     }
 }
@@ -243,4 +257,17 @@ fn urlencode(value: &str) -> String {
             other => format!("%{other:02X}"),
         })
         .collect()
+}
+
+/// Google wraps the useful sentence in `{"error": {"message": ...}}`. Falling
+/// back to the raw body keeps unexpected shapes debuggable.
+fn google_message(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|json| {
+            json.pointer("/error/message")
+                .and_then(|message| message.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| body.chars().take(500).collect())
 }

@@ -139,7 +139,7 @@ async fn send_test(
         id,
     )
     .await
-    .map_err(AppError::Internal)?;
+    .map_err(|err| AppError::Provider(err.to_string()))?;
 
     Ok(Json(json!({ "ok": true })))
 }

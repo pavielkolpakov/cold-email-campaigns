@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        insert into messages\n            (campaign_lead_id, step_id, provider_message_id, thread_id, message_id_header,\n             subject, body)\n        values ($1, $2, $3, $4, $5, $6, $7)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "49c765bd97845fc1fd41b92ceeaa4ebde0130161ffecf891bf6e11e1d0eed6c7"
+}
