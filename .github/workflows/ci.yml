@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc --noEmit
+      # next build also typechecks, after generating the route types tsc needs.
       - run: npm run build
 
   # The api, worker and scheduler are one image in three modes.
