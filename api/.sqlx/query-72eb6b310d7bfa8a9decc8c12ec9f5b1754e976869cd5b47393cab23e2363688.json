@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select sync_cursor from mailboxes where id = $1 and org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_cursor",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "sync_cursor"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "72eb6b310d7bfa8a9decc8c12ec9f5b1754e976869cd5b47393cab23e2363688"
+}

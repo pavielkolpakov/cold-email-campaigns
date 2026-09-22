@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                update campaign_leads\n                set status = 'replied', replied_at = now(), next_run_at = null,\n                    reply_message_id = $2\n                where id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb70657ef78a4fc7d765568e0542505a2339d7ba50bd448e4a6c441e2799ee83"
+}

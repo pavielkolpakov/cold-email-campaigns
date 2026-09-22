@@ -11,6 +11,8 @@ use crate::render::{self, MergeValues};
 use crate::state::AppState;
 
 const TICK: std::time::Duration = std::time::Duration::from_secs(5);
+/// How stale a mailbox's inbox may get before it is read again.
+const SYNC_INTERVAL_MINUTES: i64 = 2;
 const MAX_ATTEMPTS: i32 = 5;
 const DEFAULT_APP_URL: &str = "http://localhost:3000";
 
@@ -471,6 +473,49 @@ pub async fn run(state: AppState) -> Result<()> {
             Ok(count) => tracing::info!(count, "sent"),
             Err(error) => tracing::error!(?error, "worker tick failed"),
         }
+
+        if let Err(error) = sync_inboxes(&state).await {
+            tracing::error!(?error, "inbox sync failed");
+        }
+
         tokio::time::sleep(TICK).await;
     }
+}
+
+/// Reads every mailbox that has gone unchecked for a while, so a reply stops
+/// the sequence within a couple of minutes.
+async fn sync_inboxes(state: &AppState) -> Result<()> {
+    let due = crate::sync::claim_due_mailboxes(
+        &state.pool,
+        Duration::minutes(SYNC_INTERVAL_MINUTES),
+    )
+    .await?;
+
+    for mailbox in due {
+        match crate::sync::sync_mailbox(
+            &state.pool,
+            &state.cipher,
+            state.oauth.as_ref(),
+            state.inbox.as_ref(),
+            mailbox.org_id,
+            mailbox.mailbox_id,
+        )
+        .await
+        {
+            Ok(report) if report.replies > 0 || report.bounces > 0 => {
+                tracing::info!(
+                    replies = report.replies,
+                    bounces = report.bounces,
+                    mailbox = %mailbox.mailbox_id,
+                    "inbox synced"
+                );
+            }
+            Ok(_) => {}
+            Err(error) => {
+                tracing::error!(mailbox = %mailbox.mailbox_id, ?error, "mailbox sync failed")
+            }
+        }
+    }
+
+    Ok(())
 }

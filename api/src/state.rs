@@ -4,7 +4,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 use crate::crypto::Cipher;
-use crate::provider::Mailer;
+use crate::provider::{InboxReader, Mailer};
 use crate::provider::gmail::GmailOAuth;
 
 #[derive(Clone)]
@@ -14,4 +14,5 @@ pub struct AppState {
     pub cipher: Cipher,
     pub oauth: Arc<GmailOAuth>,
     pub mailer: Arc<dyn Mailer>,
+    pub inbox: Arc<dyn InboxReader>,
 }

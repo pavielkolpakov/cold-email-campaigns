@@ -60,3 +60,19 @@ pub trait Mailer: Send + Sync {
         message: &OutboundMessage,
     ) -> anyhow::Result<SentMessage>;
 }
+
+/// One page of a mailbox's recent messages, plus the cursor to resume from.
+pub struct InboxPage {
+    pub messages: Vec<crate::inbound::InboundMessage>,
+    pub cursor: String,
+}
+
+/// Reads a connected mailbox looking for answers to what we sent.
+#[async_trait::async_trait]
+pub trait InboxReader: Send + Sync {
+    async fn fetch(
+        &self,
+        credentials: &crate::mailboxes::Credentials,
+        cursor: Option<&str>,
+    ) -> anyhow::Result<InboxPage>;
+}

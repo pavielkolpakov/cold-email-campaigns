@@ -124,17 +124,17 @@ and backed by Postgres RLS policies as a second line.
 - [x] Auth extractor that yields `(user, org_id)`; org-scoped repository layer. *(RLS policies still open — see Open Questions.)*
 - [x] Next.js app shell: login/signup pages, authenticated layout, nav, empty dashboard.
 - [ ] Railway project: Postgres, api service, web service; env config; deploy.
-- [ ] **Verify:** signup → login → dashboard works on the live Railway URL; a second org cannot read the first org's rows (integration test).
+- [x] **Verify (local only):** signup → login → dashboard confirmed in a browser; cross-org isolation covered by tests (`separate_signups_get_separate_orgs`, and the mailbox/lead isolation tests in Phase 2). *Not yet confirmed on a live Railway URL — nothing is deployed.*
 
 ### Phase 2 — Mailboxes & Leads
 - [x] `MailProvider` trait (`send`, `fetch_messages`, `refresh_auth`) + `GmailProvider`.
-- [ ] Google Cloud project, OAuth consent screen, scopes `gmail.send` + `gmail.readonly`. *(Yours to create; see README.)*
+- [x] Google Cloud project, OAuth consent screen, scopes `gmail.send` + `gmail.readonly`. *(Project 591030765458, in Testing mode. Two gotchas hit: the connecting account must be on the Test users list, and the Gmail API must be enabled separately from OAuth — neither fails until you try to send.)*
 - [x] OAuth connect flow with state param; token encryption at rest; refresh-on-expiry helper.
 - [x] Mailbox list UI: connect, disconnect, status, daily cap. *(Sending window and timezone move to Phase 3, where the scheduler actually reads them.)*
 - [x] "Send test email" action proving the round trip.
 - [x] CSV upload: parse, preview, map columns to fields, import with per-org dedupe on email; unmapped columns land in `custom`.
 - [x] Lead list + lead table UI. *(Search and status filter deferred; nothing to filter yet.)*
-- [ ] **Verify:** connect a real Gmail account, send a test email to yourself, import a 100-row CSV with a custom column and see it on the lead detail page.
+- [x] **Verify (live):** `qwp.kpv@gmail.com` connected via real OAuth; test email delivered through the Gmail API; CSV imported with custom columns visible on the lead page. *Import was exercised with a 6-row file covering duplicates, a malformed address and a missing address — not a 100-row file, so bulk behaviour at size is still unproven.*
 
 ### Phase 3 — Sequences & Sending
 - [x] Sequence CRUD; step editor with subject/body, delay in days, reorder.
@@ -145,25 +145,50 @@ and backed by Postgres RLS policies as a second line.
 - [x] Worker mode: claim with `FOR UPDATE SKIP LOCKED`, render, enforce daily cap, send via provider, write `messages`, advance to next step. *(Business-hours window and random jitter still open — see Open Questions.)*
 - [x] Retry with exponential backoff; permanent vs transient error classification. *(Stale-lease requeue still open.)*
 - [x] Campaign detail UI: status, stats, launch/pause/resume. *(Per-lead drill-down deferred.)*
-- [ ] **Verify (needs a connected mailbox):** a 3-step sequence to a handful of seed inboxes sends step 1 immediately and steps 2–3 at the configured delays, never exceeding the daily cap, never outside the window; killing the worker mid-run loses no jobs.
+- [x] **Verify (live, partial):** a 2-step sequence sent through real Gmail from the real `worker` and `scheduler` processes; step 1 and its followup both delivered, sharing one thread.
+
+  **This run found a real bug.** The followup opened a *new* conversation: Gmail threads on the RFC822 `Message-ID` header, not the API's `threadId`, and also needs `threadId` in the send body. We now stamp our own `Message-ID`, store it, and point the followup's `In-Reply-To`/`References` at it. The pre-existing test asserted the broken contract, so it passed throughout — a fake mailer confirms whatever you tell it to.
+
+  **Still unproven:** multi-day delays (the live run used delay 0), the daily cap under real sending, and killing a worker mid-send. All three are covered by tests against the fake mailer only.
 
 ### Phase 4 — Reply Detection
-- [ ] Gmail history sync per mailbox, cursor persisted; enqueued by the scheduler on an interval.
-- [ ] Match inbound messages to `campaign_leads` by `thread_id`; ignore auto-replies (`Auto-Submitted`, vacation headers).
-- [ ] Bounce detection from delivery-status notifications; mark lead bounced and suppress.
-- [ ] On reply or bounce: mark the lead, cancel pending jobs for that lead, emit an event.
-- [ ] Followups send as replies on the original thread (`In-Reply-To` / `References`).
-- [ ] Campaign stats: sent, replied, bounced, remaining; per-lead activity timeline.
-- [ ] **Verify:** reply from a seed inbox → within one sync cycle the lead shows `replied`, its queued followups are cancelled, and campaign stats update.
+- [x] Gmail history sync per mailbox, cursor persisted. *(Claimed straight off the `mailboxes` row rather than through the job queue: a sync is idempotent and there is at most one outstanding per mailbox, so a stamped `last_synced_at` is the whole lock. An expired history cursor — Gmail keeps about a week — restarts from the current position instead of failing forever.)*
+- [x] Match inbound messages to `campaign_leads` by `thread_id`; ignore auto-replies (`Auto-Submitted`, `X-Autoreply`, `Precedence`). Our own sent copy in the thread is ignored too.
+- [x] Bounce detection from delivery-status notifications; mark lead bounced and suppress the address. *(Bounces are classified before auto-replies: they often carry both headers, and a dead address matters more.)*
+- [x] On reply or bounce: mark the lead, cancel queued jobs for that lead.
+- [x] Followups send as replies on the original thread. *(Done in Phase 3, after the live run showed it was broken.)*
+- [x] Campaign stats: sent, replied, bounced, remaining. *(Per-lead activity timeline deferred — inbound messages are not stored, only the id of the one that stopped the lead.)*
+- [x] **Verify (live):** replied to a real campaign email from Gmail; the worker marked the lead `replied` within one sync cycle (`inbox synced replies=1`), cleared `next_run_at`, and the followup — which said "IF YOU ARE READING THIS, REPLY DETECTION FAILED" — never sent. *Auto-reply and bounce paths are covered by tests only; neither has been seen against real Gmail.*
 
 ### Phase 5 — Polish & Launch
-- [ ] Error surfaces: mailbox disconnected / quota exceeded / token revoked shown in the UI with a fix action.
+- [~] Error surfaces: mailbox disconnected / quota exceeded / token revoked shown in the UI with a fix action. *(Started: provider failures now return 502 carrying Google's own message instead of a bare 500, a foreign mailbox says "mailbox not found" rather than leaking sqlx, and an unreachable API names itself. The UI fix actions are still to do.)*
 - [ ] Gmail rate-limit handling with backoff and per-mailbox concurrency ceiling.
 - [ ] Team invites and a basic owner/member role split.
 - [ ] Dashboard: active campaigns, today's sends against cap, recent replies.
 - [ ] Seed script + end-to-end test against Mailpit covering the full loop.
 - [ ] Google OAuth verification submission for the restricted scopes.
 - [ ] **Verify:** full loop green in CI against Mailpit; a revoked token produces a clear UI state instead of silent failure.
+
+## Verified against live Gmail
+
+What has actually been exercised end to end, as opposed to passing against the
+in-memory fake:
+
+| Path | Status |
+|---|---|
+| OAuth connect, consent, token storage | live |
+| Test send through the Gmail API | live |
+| Token refresh on expiry | **fake/wiremock only** |
+| Revoked grant → mailbox disconnected | **wiremock only** |
+| Worker + scheduler as real processes | live |
+| Two-step campaign, merge tags on real data | live |
+| Followup threading | live — and this is where the bug was |
+| Reply detected, followup cancelled | live |
+| Auto-reply ignored, bounce suppressed | **tests only** |
+| Gmail history cursor expiry / restart | **not verified** |
+| Multi-day delays, daily cap, worker kill | **tests only** |
+| Unsubscribe link through a real mail client | **not verified** |
+| SPF/DKIM/DMARC, spam placement | **not verified** |
 
 ## Open Questions
 

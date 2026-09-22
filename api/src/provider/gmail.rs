@@ -271,3 +271,198 @@ fn google_message(body: &str) -> String {
         })
         .unwrap_or_else(|| body.chars().take(500).collect())
 }
+
+use crate::inbound::InboundMessage;
+use crate::provider::{InboxPage, InboxReader};
+use chrono::TimeZone;
+use std::collections::BTreeMap;
+
+/// Reads a Gmail mailbox incrementally via the history API.
+pub struct GmailInbox {
+    http: reqwest::Client,
+    api_base: String,
+}
+
+impl Default for GmailInbox {
+    fn default() -> Self {
+        Self {
+            http: reqwest::Client::new(),
+            api_base: GMAIL_API_BASE.into(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Profile {
+    #[serde(rename = "historyId")]
+    history_id: String,
+}
+
+#[derive(Deserialize)]
+struct HistoryList {
+    #[serde(default)]
+    history: Vec<HistoryRecord>,
+    #[serde(rename = "historyId")]
+    history_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct HistoryRecord {
+    #[serde(rename = "messagesAdded", default)]
+    messages_added: Vec<MessageAdded>,
+}
+
+#[derive(Deserialize)]
+struct MessageAdded {
+    message: MessageRef,
+}
+
+#[derive(Deserialize)]
+struct MessageRef {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct GmailMessage {
+    id: String,
+    #[serde(rename = "threadId")]
+    thread_id: String,
+    #[serde(rename = "internalDate")]
+    internal_date: Option<String>,
+    payload: Option<MessagePayload>,
+}
+
+#[derive(Deserialize)]
+struct MessagePayload {
+    #[serde(default)]
+    headers: Vec<GmailHeader>,
+}
+
+#[derive(Deserialize)]
+struct GmailHeader {
+    name: String,
+    value: String,
+}
+
+#[async_trait::async_trait]
+impl InboxReader for GmailInbox {
+    async fn fetch(
+        &self,
+        credentials: &Credentials,
+        cursor: Option<&str>,
+    ) -> anyhow::Result<InboxPage> {
+        let token = &credentials.access_token;
+
+        // No cursor yet: take the mailbox's current position and read nothing.
+        // Scanning history from the beginning would replay old conversations.
+        let Some(cursor) = cursor else {
+            let profile: Profile = self
+                .get(&format!("{}/users/me/profile", self.api_base), token)
+                .await?
+                .json()
+                .await?;
+            return Ok(InboxPage {
+                messages: Vec::new(),
+                cursor: profile.history_id,
+            });
+        };
+
+        let response = self
+            .get(
+                &format!(
+                    "{}/users/me/history?startHistoryId={cursor}&historyTypes=messageAdded",
+                    self.api_base
+                ),
+                token,
+            )
+            .await?;
+
+        // Gmail drops history older than about a week; restart from the
+        // current position rather than failing forever.
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            let profile: Profile = self
+                .get(&format!("{}/users/me/profile", self.api_base), token)
+                .await?
+                .json()
+                .await?;
+            tracing::warn!("gmail history cursor expired, restarting from current position");
+            return Ok(InboxPage {
+                messages: Vec::new(),
+                cursor: profile.history_id,
+            });
+        }
+
+        let history: HistoryList = response.error_for_status()?.json().await?;
+        let next_cursor = history.history_id.unwrap_or_else(|| cursor.to_string());
+
+        let mut ids: Vec<String> = history
+            .history
+            .into_iter()
+            .flat_map(|record| record.messages_added)
+            .map(|added| added.message.id)
+            .collect();
+        ids.sort();
+        ids.dedup();
+
+        let mut messages = Vec::with_capacity(ids.len());
+        for id in ids {
+            match self.message(&id, token).await {
+                Ok(message) => messages.push(message),
+                // One unreadable message must not abandon the whole sync.
+                Err(error) => tracing::warn!(%id, ?error, "skipping unreadable message"),
+            }
+        }
+
+        Ok(InboxPage {
+            messages,
+            cursor: next_cursor,
+        })
+    }
+}
+
+impl GmailInbox {
+    async fn get(&self, url: &str, token: &str) -> anyhow::Result<reqwest::Response> {
+        Ok(self.http.get(url).bearer_auth(token).send().await?)
+    }
+
+    async fn message(&self, id: &str, token: &str) -> anyhow::Result<InboundMessage> {
+        let message: GmailMessage = self
+            .get(
+                &format!("{}/users/me/messages/{id}?format=metadata", self.api_base),
+                token,
+            )
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        let headers: BTreeMap<String, String> = message
+            .payload
+            .map(|payload| payload.headers)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|header| (header.name.to_lowercase(), header.value))
+            .collect();
+
+        Ok(InboundMessage {
+            provider_message_id: message.id,
+            thread_id: message.thread_id,
+            from: extract_address(headers.get("from").map(String::as_str).unwrap_or_default()),
+            subject: headers.get("subject").cloned().unwrap_or_default(),
+            received_at: message
+                .internal_date
+                .and_then(|millis| millis.parse::<i64>().ok())
+                .and_then(|millis| Utc.timestamp_millis_opt(millis).single())
+                .unwrap_or_else(Utc::now),
+            headers,
+        })
+    }
+}
+
+/// `From` is usually `Ada Lovelace <ada@example.com>`; we only want the address.
+fn extract_address(from: &str) -> String {
+    match (from.find('<'), from.find('>')) {
+        (Some(start), Some(end)) if start < end => from[start + 1..end].trim().to_lowercase(),
+        _ => from.trim().to_lowercase(),
+    }
+}

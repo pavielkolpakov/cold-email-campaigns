@@ -545,3 +545,238 @@ async fn a_followup_carries_what_gmail_needs_to_thread_it(pool: PgPool) {
     // Mail clients also group on subject, so a followup reuses the original.
     assert_eq!(followup.subject, "Re: Quick question, Ada");
 }
+
+use support::{FakeInbox, inbound};
+
+/// Sends step one to everyone and returns the thread each lead is now in.
+async fn send_first_step(pool: &PgPool, org_id: Uuid) -> Uuid {
+    let campaign_id = launched_campaign(pool, org_id).await;
+    api::scheduler::enqueue_due(pool).await.unwrap();
+    work(pool, &FakeMailer::default()).await;
+    campaign_id
+}
+
+async fn mailbox_id(pool: &PgPool) -> Uuid {
+    sqlx::query_scalar!("select id from mailboxes limit 1")
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn a_reply_stops_that_lead_and_nobody_else(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let campaign_id = send_first_step(&pool, org_id).await;
+
+    // Everyone is in thread-1 with the fake mailer, so target ada by her address.
+    let ada_thread = sqlx::query_scalar!(
+        "select cl.thread_id from campaign_leads cl join leads l on l.id = cl.lead_id
+         where l.email = 'ada@example.com'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+
+    let reader = FakeInbox::with(vec![inbound(
+        &ada_thread,
+        "ada@example.com",
+        &[("In-Reply-To", "<ours@acme.com>")],
+    )]);
+
+    let report = api::sync::sync_mailbox(
+        &pool,
+        &cipher(),
+        &NeverRefreshes,
+        &reader,
+        org_id,
+        mailbox_id(&pool).await,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(report.replies, 1);
+
+    let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
+    assert_eq!(stats.replied, 1);
+    assert_eq!(stats.pending, 2, "the other two carry on");
+
+    // Her followup is cancelled, theirs are not.
+    make_everything_due(&pool).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+    let mailer = FakeMailer::default();
+    work(&pool, &mailer).await;
+    let sent = mailer.sent.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+    assert!(
+        !sent.iter().any(|(_, m)| m.to == "ada@example.com"),
+        "someone who replied must never get the followup"
+    );
+}
+
+async fn thread_of(pool: &PgPool, email: &str) -> String {
+    sqlx::query_scalar!(
+        "select cl.thread_id from campaign_leads cl join leads l on l.id = cl.lead_id
+         where l.email = $1",
+        email
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+    .unwrap()
+}
+
+async fn sync(pool: &PgPool, org_id: Uuid, reader: &FakeInbox) -> api::sync::SyncReport {
+    let mailbox = mailbox_id(pool).await;
+    api::sync::sync_mailbox(pool, &cipher(), &NeverRefreshes, reader, org_id, mailbox)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn an_out_of_office_does_not_stop_the_sequence(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let campaign_id = send_first_step(&pool, org_id).await;
+    let thread = thread_of(&pool, "ada@example.com").await;
+
+    let reader = FakeInbox::with(vec![inbound(
+        &thread,
+        "ada@example.com",
+        &[("Auto-Submitted", "auto-replied")],
+    )]);
+    let report = sync(&pool, org_id, &reader).await;
+
+    assert_eq!(report.replies, 0);
+    assert_eq!(report.ignored, 1);
+
+    let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
+    assert_eq!(stats.replied, 0);
+    assert_eq!(stats.pending, 3, "she is still on holiday, not engaged");
+}
+
+#[sqlx::test]
+async fn a_bounce_stops_the_lead_and_suppresses_the_address(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let campaign_id = send_first_step(&pool, org_id).await;
+    let thread = thread_of(&pool, "ada@example.com").await;
+
+    let reader = FakeInbox::with(vec![inbound(
+        &thread,
+        "mailer-daemon@googlemail.com",
+        &[("Content-Type", "multipart/report; report-type=delivery-status")],
+    )]);
+    let report = sync(&pool, org_id, &reader).await;
+
+    assert_eq!(report.bounces, 1);
+
+    let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
+    assert_eq!(stats.bounced, 1);
+
+    assert!(
+        api::suppressions::is_suppressed(&pool, org_id, "ada@example.com")
+            .await
+            .unwrap(),
+        "a dead address must not be mailed by a future campaign either"
+    );
+}
+
+#[sqlx::test]
+async fn unrelated_inbox_traffic_is_ignored(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let campaign_id = send_first_step(&pool, org_id).await;
+    let thread = thread_of(&pool, "ada@example.com").await;
+
+    let reader = FakeInbox::with(vec![
+        // Someone else's conversation entirely.
+        inbound("some-other-thread", "newsletter@example.org", &[]),
+        // Our own sent copy, which Gmail also returns in the thread.
+        inbound(&thread, "sender@acme.com", &[]),
+    ]);
+    let report = sync(&pool, org_id, &reader).await;
+
+    assert_eq!(report.replies, 0);
+    assert_eq!(report.ignored, 2);
+
+    let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
+    assert_eq!(stats.pending, 3);
+}
+
+#[sqlx::test]
+async fn the_sync_resumes_from_where_it_stopped(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    send_first_step(&pool, org_id).await;
+
+    let reader = FakeInbox::with(vec![]);
+    sync(&pool, org_id, &reader).await;
+    assert_eq!(*reader.seen_cursor.lock().unwrap(), None, "first sync has no cursor");
+
+    sync(&pool, org_id, &reader).await;
+    assert_eq!(
+        reader.seen_cursor.lock().unwrap().as_deref(),
+        Some("cursor-2"),
+        "the second sync must not re-read the whole mailbox"
+    );
+}
+
+#[sqlx::test]
+async fn one_orgs_sync_cannot_touch_another_orgs_campaign(pool: PgPool) {
+    let acme = seed_org(&pool, "Acme").await;
+    let globex = seed_org(&pool, "Globex").await;
+    send_first_step(&pool, acme).await;
+    let thread = thread_of(&pool, "ada@example.com").await;
+
+    let reader = FakeInbox::with(vec![inbound(&thread, "ada@example.com", &[])]);
+    let mailbox = mailbox_id(&pool).await;
+
+    // Globex syncing with Acme's mailbox id must get nowhere.
+    assert!(
+        api::sync::sync_mailbox(&pool, &cipher(), &NeverRefreshes, &reader, globex, mailbox)
+            .await
+            .is_err()
+    );
+
+    let replied = sqlx::query_scalar!("select count(*) from campaign_leads where status = 'replied'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(replied, Some(0));
+}
+
+#[sqlx::test]
+async fn a_mailbox_is_claimed_for_sync_by_one_worker_only(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    seed_mailbox(&pool, org_id).await;
+
+    // Never synced, so it is due.
+    let (first, second) = tokio::join!(
+        api::sync::claim_due_mailboxes(&pool, chrono::Duration::minutes(2)),
+        api::sync::claim_due_mailboxes(&pool, chrono::Duration::minutes(2)),
+    );
+    let claimed = first.unwrap().len() + second.unwrap().len();
+    assert_eq!(claimed, 1, "two workers must not sync the same mailbox at once");
+
+    // Not due again until the interval passes.
+    assert!(
+        api::sync::claim_due_mailboxes(&pool, chrono::Duration::minutes(2))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test]
+async fn a_disconnected_mailbox_is_not_synced(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    seed_mailbox(&pool, org_id).await;
+    sqlx::query!("update mailboxes set status = 'disconnected'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert!(
+        api::sync::claim_due_mailboxes(&pool, chrono::Duration::minutes(2))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

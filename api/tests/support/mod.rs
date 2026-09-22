@@ -81,5 +81,56 @@ pub fn test_app(pool: PgPool, mailer: Arc<FakeMailer>) -> Router {
             "http://localhost:1/token".into(),
         )),
         mailer,
+        inbox: Arc::new(FakeInbox::with(Vec::new())),
     })
+}
+
+use api::inbound::InboundMessage;
+use api::provider::{InboxPage, InboxReader};
+use chrono::Utc;
+use std::collections::BTreeMap;
+
+/// Serves a fixed set of inbox messages, and remembers the cursor it was given.
+pub struct FakeInbox {
+    pub page: Mutex<Vec<InboundMessage>>,
+    pub seen_cursor: Mutex<Option<String>>,
+}
+
+impl FakeInbox {
+    pub fn with(messages: Vec<InboundMessage>) -> Self {
+        Self {
+            page: Mutex::new(messages),
+            seen_cursor: Mutex::new(None),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl InboxReader for FakeInbox {
+    async fn fetch(
+        &self,
+        _credentials: &Credentials,
+        cursor: Option<&str>,
+    ) -> anyhow::Result<InboxPage> {
+        *self.seen_cursor.lock().unwrap() = cursor.map(str::to_string);
+        Ok(InboxPage {
+            messages: self.page.lock().unwrap().clone(),
+            cursor: "cursor-2".into(),
+        })
+    }
+}
+
+/// An inbound message in `thread`, from `from`, with the given extra headers.
+pub fn inbound(thread: &str, from: &str, headers: &[(&str, &str)]) -> InboundMessage {
+    InboundMessage {
+        provider_message_id: format!("in-{thread}"),
+        thread_id: thread.into(),
+        from: from.into(),
+        subject: "Re: Quick question".into(),
+        headers: headers
+            .iter()
+            .map(|(key, value)| (key.to_lowercase(), value.to_string()))
+            .collect::<BTreeMap<_, _>>(),
+        received_at: Utc::now(),
+    }
 }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use api::crypto::Cipher;
-use api::provider::gmail::{GmailMailer, GmailOAuth};
+use api::provider::gmail::{GmailInbox, GmailMailer, GmailOAuth};
 use api::{config, routes, scheduler, state, worker};
 use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
         cipher,
         oauth,
         mailer: Arc::new(GmailMailer::default()),
+        inbox: Arc::new(GmailInbox::default()),
     };
 
     // One binary, three modes: `api`, `worker`, `scheduler`.
