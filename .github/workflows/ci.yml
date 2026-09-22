@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One deploy at a time on main; superseded PR runs are cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - '.github/workflows/**'
+            web:
+              - 'web/**'
+              - '.github/workflows/**'
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: coldemail
+          POSTGRES_PASSWORD: coldemail
+          POSTGRES_DB: coldemail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U coldemail"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # Compile against the checked-in .sqlx cache, as the Docker build does, so
+      # a stale cache fails here instead of on Railway. Tests still get a live DB.
+      SQLX_OFFLINE: "true"
+      DATABASE_URL: postgres://coldemail:coldemail@localhost:5432/coldemail
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  # The api, worker and scheduler are one image in three modes.
+  deploy-api:
+    needs: [changes, api]
+    if: github.event_name == 'push' && needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        service: [api, worker, scheduler]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g @railway/cli
+      # --path-as-root uploads only api/, which is where the Dockerfile lives.
+      - run: railway up api --path-as-root --service "${{ matrix.service }}" --ci -m "$MESSAGE"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+
+  deploy-web:
+    needs: [changes, web]
+    if: github.event_name == 'push' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g @railway/cli
+      - run: railway up web --path-as-root --service web --ci -m "$MESSAGE"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          MESSAGE: ${{ github.event.head_commit.message }}
