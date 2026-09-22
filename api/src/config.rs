@@ -18,7 +18,11 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         Ok(Self {
             database_url: var("DATABASE_URL")?,
-            api_bind: std::env::var("API_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into()),
+            // Railway and most hosts inject PORT; API_BIND stays for local use.
+            api_bind: std::env::var("API_BIND").unwrap_or_else(|_| {
+                let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
+                format!("0.0.0.0:{port}")
+            }),
             app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into()),
             session_cookie_name: std::env::var("SESSION_COOKIE_NAME")
                 .unwrap_or_else(|_| "ce_session".into()),

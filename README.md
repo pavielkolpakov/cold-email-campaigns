@@ -59,3 +59,30 @@ GOOGLE_CLIENT_SECRET=...
 ```
 
 Tokens are encrypted with `ENCRYPTION_KEY` before they touch the database.
+
+## Deployment (Railway)
+
+Project `cold-email-campaigns` runs five services in `production`:
+
+| Service   | What it is                | Notes |
+|-----------|---------------------------|-------|
+| Postgres  | managed database          | private networking only, no public URL |
+| api       | `api` mode                | public domain, runs migrations on boot |
+| worker    | `worker` mode             | sends and syncs inboxes |
+| scheduler | `scheduler` mode          | enqueues due steps, sweeps stale jobs |
+| web       | Next.js                   | public domain, proxies `/api/*` to `api` over private networking |
+
+Deploys go from the local checkout, one subdirectory per service:
+
+```bash
+railway up ./api --path-as-root --service api       --detach -m "api"
+railway up ./api --path-as-root --service worker    --detach -m "worker"
+railway up ./api --path-as-root --service scheduler --detach -m "scheduler"
+railway up ./web --path-as-root --service web       --detach -m "web"
+```
+
+`--path-as-root` matters: without it the CLI uploads from the git root and the
+builder sees a monorepo it cannot identify.
+
+The Rust binary picks its mode from `MODE`, set per service. `api` binds `PORT`
+(8080), which `web` reaches at `http://api.railway.internal:8080`.
