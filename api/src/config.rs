@@ -40,6 +40,11 @@ impl Config {
         !self.google_client_id.is_empty() && !self.google_client_secret.is_empty()
     }
 
+    /// Google sends sign-in callbacks here, through the web app's /api proxy.
+    pub fn google_sign_in_redirect_uri(&self) -> String {
+        format!("{}/api/auth/google/callback", self.app_url)
+    }
+
     pub fn secure_cookies(&self) -> bool {
         self.app_url.starts_with("https://")
     }

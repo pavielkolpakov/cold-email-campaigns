@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AuthForm } from "@/components/auth-form";
+import { GoogleSignIn } from "@/components/google-sign-in";
 import {
   Card,
   CardContent,
@@ -9,7 +10,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+
   return (
     <Card className="auth-card w-full max-w-sm">
       <CardHeader>
@@ -17,6 +24,7 @@ export default function LoginPage() {
         <CardDescription>Welcome back.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <GoogleSignIn error={error} />
         <AuthForm
           endpoint="/auth/login"
           submitLabel="Sign in"

@@ -42,6 +42,48 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     }
 }
 
+/// Finds the account for a Google-verified email, or makes one. A new person
+/// gets their own org, the same as a password signup would give them.
+pub async fn sign_in_with_google(pool: &PgPool, email: &str, name: &str) -> AppResult<CurrentUser> {
+    let email = email.trim().to_lowercase();
+    let existing = sqlx::query_as!(
+        CurrentUser,
+        "select id, org_id, email, name, role from users where lower(email) = $1",
+        email
+    )
+    .fetch_optional(pool)
+    .await?;
+    if let Some(user) = existing {
+        return Ok(user);
+    }
+
+    let name = match name.trim() {
+        "" => email.split('@').next().unwrap_or_default(),
+        name => name,
+    };
+    let org_name = format!("{name}'s workspace");
+
+    let mut tx = pool.begin().await?;
+    let org_id = sqlx::query_scalar!("insert into orgs (name) values ($1) returning id", org_name)
+        .fetch_one(&mut *tx)
+        .await?;
+    let user = sqlx::query_as!(
+        CurrentUser,
+        r#"
+        insert into users (org_id, email, name, role)
+        values ($1, $2, $3, 'owner')
+        returning id, org_id, email, name, role
+        "#,
+        org_id,
+        email,
+        name
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(user)
+}
+
 pub async fn create_session(pool: &PgPool, user_id: Uuid, ttl_days: i64) -> AppResult<Uuid> {
     let expires_at = Utc::now() + Duration::days(ttl_days);
     let id = sqlx::query_scalar!(

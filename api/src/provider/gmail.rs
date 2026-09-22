@@ -85,12 +85,24 @@ pub const GMAIL_API_BASE: &str = "https://gmail.googleapis.com/gmail/v1";
 pub const SCOPES: &str = "https://www.googleapis.com/auth/gmail.send \
 https://www.googleapis.com/auth/gmail.readonly \
 https://www.googleapis.com/auth/userinfo.email";
+/// Sign-in only needs to know who the person is, not their mailbox.
+pub const SIGN_IN_SCOPES: &str = "openid email profile";
+
+/// Who a set of tokens belongs to, as Google reports it.
+#[derive(Deserialize)]
+pub struct GoogleProfile {
+    pub email: String,
+    #[serde(default)]
+    pub verified_email: bool,
+    #[serde(default)]
+    pub name: String,
+}
 
 impl GmailOAuth {
     /// Where to send the user to grant access. `access_type=offline` plus
     /// `prompt=consent` is what makes Google hand back a refresh token.
     pub fn consent_url(&self, redirect_uri: &str, state: &str) -> String {
-        let params = [
+        self.authorize_url(&[
             ("client_id", self.client_id.as_str()),
             ("redirect_uri", redirect_uri),
             ("response_type", "code"),
@@ -98,7 +110,23 @@ impl GmailOAuth {
             ("access_type", "offline"),
             ("prompt", "consent"),
             ("state", state),
-        ];
+        ])
+    }
+
+    /// Where to send someone signing in to the app itself. No offline access:
+    /// the token is used once to read the profile and then dropped.
+    pub fn sign_in_url(&self, redirect_uri: &str, state: &str) -> String {
+        self.authorize_url(&[
+            ("client_id", self.client_id.as_str()),
+            ("redirect_uri", redirect_uri),
+            ("response_type", "code"),
+            ("scope", SIGN_IN_SCOPES),
+            ("prompt", "select_account"),
+            ("state", state),
+        ])
+    }
+
+    fn authorize_url(&self, params: &[(&str, &str)]) -> String {
         let query = params
             .iter()
             .map(|(key, value)| format!("{key}={}", urlencode(value)))
@@ -109,13 +137,25 @@ impl GmailOAuth {
 
     /// Trades the one-time code from the callback for tokens.
     pub async fn exchange_code(&self, code: &str, redirect_uri: &str) -> anyhow::Result<Credentials> {
-        #[derive(Deserialize)]
-        struct CodeResponse {
-            access_token: String,
-            refresh_token: Option<String>,
-            expires_in: i64,
-        }
+        let token = self.code_tokens(code, redirect_uri).await?;
+        let refresh_token = token.refresh_token.ok_or_else(|| {
+            anyhow!("google did not return a refresh token; the account must be disconnected in its google security settings and reconnected")
+        })?;
 
+        Ok(Credentials {
+            access_token: token.access_token,
+            refresh_token,
+            expires_at: Utc::now() + Duration::seconds(token.expires_in),
+        })
+    }
+
+    /// Trades a sign-in code for the profile of the person who granted it.
+    pub async fn sign_in_profile(&self, code: &str, redirect_uri: &str) -> anyhow::Result<GoogleProfile> {
+        let token = self.code_tokens(code, redirect_uri).await?;
+        self.profile(&token.access_token).await
+    }
+
+    async fn code_tokens(&self, code: &str, redirect_uri: &str) -> anyhow::Result<CodeResponse> {
         let response = self
             .http
             .post(&self.token_endpoint)
@@ -135,26 +175,16 @@ impl GmailOAuth {
             return Err(anyhow!("code exchange failed with {status}: {body}"));
         }
 
-        let token: CodeResponse = response.json().await?;
-        let refresh_token = token.refresh_token.ok_or_else(|| {
-            anyhow!("google did not return a refresh token; the account must be disconnected in its google security settings and reconnected")
-        })?;
-
-        Ok(Credentials {
-            access_token: token.access_token,
-            refresh_token,
-            expires_at: Utc::now() + Duration::seconds(token.expires_in),
-        })
+        Ok(response.json().await?)
     }
 
     /// Which address the granted tokens belong to.
     pub async fn mailbox_address(&self, access_token: &str) -> anyhow::Result<String> {
-        #[derive(Deserialize)]
-        struct Profile {
-            email: String,
-        }
+        Ok(self.profile(access_token).await?.email)
+    }
 
-        let profile: Profile = self
+    async fn profile(&self, access_token: &str) -> anyhow::Result<GoogleProfile> {
+        Ok(self
             .http
             .get("https://www.googleapis.com/oauth2/v2/userinfo")
             .bearer_auth(access_token)
@@ -162,9 +192,15 @@ impl GmailOAuth {
             .await?
             .error_for_status()?
             .json()
-            .await?;
-        Ok(profile.email)
+            .await?)
     }
+}
+
+#[derive(Deserialize)]
+struct CodeResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: i64,
 }
 
 /// Sends through the Gmail API.

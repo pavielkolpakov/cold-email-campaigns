@@ -1,5 +1,6 @@
 use axum::Router;
-use axum::extract::State;
+use axum::extract::{Query, State};
+use axum::response::Redirect;
 use axum::routing::{get, post};
 
 use crate::state::AppState;
@@ -10,17 +11,19 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
+        .route("/auth/google/authorize", get(google_authorize))
+        .route("/auth/google/callback", get(google_callback))
 }
 
 use axum::Json;
-use axum_extra::extract::cookie::CookieJar;
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::auth::{
     CurrentUser, clear_session_cookie, create_session, delete_session, hash_password,
-    session_cookie, verify_password,
+    session_cookie, sign_in_with_google, verify_password,
 };
 use crate::error::{AppError, AppResult};
 
@@ -143,7 +146,11 @@ async fn login(
     .await?;
 
     let record = record.ok_or(AppError::InvalidCredentials)?;
-    if !verify_password(&body.password, &record.password_hash) {
+    // Google-only accounts have no password, so no password can match.
+    let Some(password_hash) = &record.password_hash else {
+        return Err(AppError::InvalidCredentials);
+    };
+    if !verify_password(&body.password, password_hash) {
         return Err(AppError::InvalidCredentials);
     }
 
@@ -174,4 +181,94 @@ async fn logout(State(state): State<AppState>, jar: CookieJar) -> AppResult<(Coo
 
 async fn me(user: CurrentUser) -> Json<UserResponse> {
     Json(user.into())
+}
+
+const GOOGLE_STATE_COOKIE: &str = "ce_google_sign_in_state";
+
+/// Starts Google sign-in. As with connecting a mailbox, the `state` round-trip
+/// is checked against a cookie so a callback cannot be forged.
+async fn google_authorize(State(state): State<AppState>, jar: CookieJar) -> AppResult<(CookieJar, Redirect)> {
+    if !state.config.google_configured() {
+        return Err(AppError::BadRequest(
+            "google oauth is not configured on this server".into(),
+        ));
+    }
+
+    let nonce = Uuid::new_v4().to_string();
+    let url = state
+        .oauth
+        .sign_in_url(&state.config.google_sign_in_redirect_uri(), &nonce);
+
+    let mut cookie = Cookie::new(GOOGLE_STATE_COOKIE, nonce);
+    cookie.set_http_only(true);
+    cookie.set_same_site(SameSite::Lax);
+    cookie.set_secure(state.config.secure_cookies());
+    cookie.set_path("/");
+    cookie.set_max_age(time::Duration::minutes(10));
+
+    Ok((jar.add(cookie), Redirect::to(&url)))
+}
+
+#[derive(Deserialize)]
+struct GoogleCallback {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+/// The browser lands here from Google, so every failure goes back to the login
+/// page rather than rendering a bare JSON error.
+async fn google_callback(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<GoogleCallback>,
+) -> (CookieJar, Redirect) {
+    let mut cleared = Cookie::new(GOOGLE_STATE_COOKIE, "");
+    cleared.set_path("/");
+    cleared.set_max_age(time::Duration::ZERO);
+    let expected = jar.get(GOOGLE_STATE_COOKIE).map(|cookie| cookie.value().to_string());
+    let jar = jar.add(cleared);
+
+    let login = format!("{}/login", state.config.app_url);
+    let outcome = async {
+        if let Some(error) = params.error {
+            tracing::warn!(%error, "google returned a sign-in error");
+            return Err("denied");
+        }
+        if expected.is_none() || expected != params.state {
+            return Err("expired");
+        }
+        let code = params.code.ok_or("failed")?;
+
+        let profile = state
+            .oauth
+            .sign_in_profile(&code, &state.config.google_sign_in_redirect_uri())
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "google sign-in code exchange failed");
+                "failed"
+            })?;
+        if !profile.verified_email {
+            return Err("unverified");
+        }
+
+        let user = sign_in_with_google(&state.pool, &profile.email, &profile.name)
+            .await
+            .map_err(|err| {
+                tracing::error!(error = ?err, "google sign-in could not load the account");
+                "failed"
+            })?;
+        create_session(&state.pool, user.id, state.config.session_ttl_days)
+            .await
+            .map_err(|_| "failed")
+    }
+    .await;
+
+    match outcome {
+        Ok(session_id) => (
+            jar.add(session_cookie(&state.config, session_id.to_string())),
+            Redirect::to(&format!("{}/dashboard", state.config.app_url)),
+        ),
+        Err(reason) => (jar, Redirect::to(&format!("{login}?error=google_{reason}"))),
+    }
 }

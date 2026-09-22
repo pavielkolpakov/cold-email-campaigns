@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        select id, org_id, email, name, role, password_hash\n        from users\n        where lower(email) = $1\n        ",
+  "query": "select id, org_id, email, name, role from users where lower(email) = $1",
   "describe": {
     "columns": [
       {
@@ -57,17 +57,6 @@
             "name": "role"
           }
         }
-      },
-      {
-        "ordinal": 5,
-        "name": "password_hash",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "password_hash"
-          }
-        }
       }
     ],
     "parameters": {
@@ -80,9 +69,8 @@
       false,
       false,
       false,
-      false,
-      true
+      false
     ]
   },
-  "hash": "11244dc5948b4c09fc0068d3ad822f5e0b0e214a9dced20558f5cefaa753719f"
+  "hash": "99c1dcbb299b3154ccfffc2bea7b0046e616bb87fa92bcd35b4e5f57596f1c91"
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AuthForm } from "@/components/auth-form";
+import { GoogleSignIn } from "@/components/google-sign-in";
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ export default function SignupPage() {
         <CardDescription>Start running campaigns from your own mailbox.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <GoogleSignIn />
         <AuthForm
           endpoint="/auth/signup"
           submitLabel="Create workspace"

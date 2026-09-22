@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        select id, org_id, email, name, role, password_hash\n        from users\n        where lower(email) = $1\n        ",
+  "query": "\n        insert into users (org_id, email, name, role)\n        values ($1, $2, $3, 'owner')\n        returning id, org_id, email, name, role\n        ",
   "describe": {
     "columns": [
       {
@@ -57,21 +57,12 @@
             "name": "role"
           }
         }
-      },
-      {
-        "ordinal": 5,
-        "name": "password_hash",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "password_hash"
-          }
-        }
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Text",
         "Text"
       ]
     },
@@ -80,9 +71,8 @@
       false,
       false,
       false,
-      false,
-      true
+      false
     ]
   },
-  "hash": "11244dc5948b4c09fc0068d3ad822f5e0b0e214a9dced20558f5cefaa753719f"
+  "hash": "7e65ad4597c11060339cfe34cb163ddfb809ead62f1733b259183220faed1d5c"
 }

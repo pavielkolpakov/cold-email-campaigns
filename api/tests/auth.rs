@@ -175,3 +175,92 @@ async fn separate_signups_get_separate_orgs(pool: PgPool) {
 
     assert_ne!(acme["org_id"], globex["org_id"]);
 }
+
+#[sqlx::test]
+async fn google_sign_in_creates_an_account_once(pool: PgPool) {
+    let first = api::auth::sign_in_with_google(&pool, "Grace@Navy.mil", "Grace Hopper")
+        .await
+        .unwrap();
+    assert_eq!(first.email, "grace@navy.mil");
+    assert_eq!(first.role, "owner");
+
+    let again = api::auth::sign_in_with_google(&pool, "grace@navy.mil", "Grace Hopper")
+        .await
+        .unwrap();
+    assert_eq!(again.id, first.id);
+
+    let orgs = sqlx::query_scalar!("select count(*) from orgs")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(orgs, Some(1));
+}
+
+#[sqlx::test]
+async fn google_sign_in_reuses_a_password_account(pool: PgPool) {
+    let app = app(pool.clone());
+    let (_, _, body) = post(&app, "/auth/signup", signup_body("Acme", "ada@acme.com")).await;
+
+    let user = api::auth::sign_in_with_google(&pool, "ada@acme.com", "Ada")
+        .await
+        .unwrap();
+    assert_eq!(user.id.to_string(), body["id"]);
+}
+
+#[sqlx::test]
+async fn a_google_only_account_cannot_log_in_with_a_password(pool: PgPool) {
+    api::auth::sign_in_with_google(&pool, "grace@navy.mil", "Grace").await.unwrap();
+
+    let (status, cookie, _) = post(
+        &app(pool),
+        "/auth/login",
+        json!({ "email": "grace@navy.mil", "password": "" }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(cookie.is_none());
+}
+
+async fn get_raw(app: &Router, uri: &str, cookie: Option<&str>) -> axum::response::Response {
+    let mut request = Request::builder().method("GET").uri(uri);
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+#[sqlx::test]
+async fn google_authorize_redirects_with_a_state_cookie(pool: PgPool) {
+    let response = get_raw(&app(pool), "/auth/google/authorize", None).await;
+    assert!(response.status().is_redirection());
+
+    let location = response.headers()[header::LOCATION].to_str().unwrap();
+    assert!(location.starts_with("https://accounts.google.com/"));
+    assert!(location.contains("scope=openid"));
+    assert!(location.contains("api%2Fauth%2Fgoogle%2Fcallback"));
+
+    let cookie = response.headers()[header::SET_COOKIE].to_str().unwrap();
+    assert!(cookie.starts_with("ce_google_sign_in_state="));
+}
+
+#[sqlx::test]
+async fn google_callback_rejects_a_forged_state(pool: PgPool) {
+    let response = get_raw(
+        &app(pool),
+        "/auth/google/callback?code=abc&state=forged",
+        Some("ce_google_sign_in_state=expected"),
+    )
+    .await;
+
+    let location = response.headers()[header::LOCATION].to_str().unwrap();
+    assert_eq!(location, "http://localhost:3000/login?error=google_expired");
+    let sets_session = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .any(|value| value.to_str().unwrap().starts_with("ce_session="));
+    assert!(!sets_session);
+}
