@@ -11,7 +11,7 @@ import {
 
 export default function SignupPage() {
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="auth-card w-full max-w-sm">
       <CardHeader>
         <CardTitle>Create your workspace</CardTitle>
         <CardDescription>Start running campaigns from your own mailbox.</CardDescription>

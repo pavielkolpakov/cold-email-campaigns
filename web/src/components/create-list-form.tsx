@@ -28,6 +28,7 @@ export function CreateListForm() {
     <form onSubmit={onSubmit} className="flex items-start gap-2">
       <div className="space-y-1">
         <Input
+          aria-label="List name"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New list name"

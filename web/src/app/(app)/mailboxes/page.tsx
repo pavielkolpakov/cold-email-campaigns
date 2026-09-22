@@ -12,9 +12,9 @@ export default async function MailboxesPage({
   const data = await serverFetch<{ mailboxes: Mailbox[] }>("/mailboxes");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Mailboxes</h1>
+    <div className="space-y-8">
+      <div className="page-heading">
+        <div><h1>Mailboxes</h1><p>Your sending addresses, connection status, and daily limits.</p></div>
         <a
           href="/api/mailboxes/gmail/authorize"
           className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"

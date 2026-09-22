@@ -7,8 +7,8 @@ export default async function SequencesPage() {
   const sequences = data?.sequences ?? [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Sequences</h1>
+    <div className="space-y-8">
+      <div className="page-heading"><div><h1>Sequences</h1><p>Write your first message. Give every follow-up a purpose.</p></div></div>
       <SequenceForm />
 
       {sequences.length > 0 && (

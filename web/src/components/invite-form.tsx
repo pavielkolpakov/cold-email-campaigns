@@ -35,6 +35,7 @@ export function InviteForm() {
     <form onSubmit={onSubmit} className="space-y-2">
       <div className="flex items-start gap-2">
         <Input
+          aria-label="Teammate email"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}

@@ -9,7 +9,7 @@ export default async function TeamPage() {
   if (user?.role !== "owner") {
     return (
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Team</h1>
+        <div className="page-heading"><div><h1>Team</h1><p>Manage the people who share your workspace.</p></div></div>
         <p className="text-muted-foreground">Only an owner can manage invitations.</p>
       </div>
     );
@@ -18,8 +18,8 @@ export default async function TeamPage() {
   const invites = data?.invites ?? [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Team</h1>
+    <div className="space-y-8">
+      <div className="page-heading"><div><h1>Team</h1><p>Manage the people who share your workspace.</p></div></div>
       <InviteForm />
 
       {invites.length > 0 && (

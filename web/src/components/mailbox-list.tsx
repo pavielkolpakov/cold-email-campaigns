@@ -27,7 +27,7 @@ export function MailboxList({ mailboxes }: { mailboxes: Mailbox[] }) {
   }
 
   if (mailboxes.length === 0) {
-    return <p className="text-muted-foreground">No mailboxes connected yet.</p>;
+    return <div className="empty-state bg-card"><h2 className="font-medium">Your outreach starts with your inbox</h2><p>Connect a Gmail account above to send campaigns and track replies in one place.</p></div>;
   }
 
   return (

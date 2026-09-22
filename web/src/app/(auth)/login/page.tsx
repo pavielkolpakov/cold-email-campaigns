@@ -11,7 +11,7 @@ import {
 
 export default function LoginPage() {
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="auth-card w-full max-w-sm">
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
         <CardDescription>Welcome back.</CardDescription>

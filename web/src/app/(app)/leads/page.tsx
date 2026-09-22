@@ -9,12 +9,12 @@ export default async function LeadsPage() {
   const lists = data?.lists ?? [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Lead lists</h1>
+    <div className="space-y-8">
+      <div className="page-heading"><div><h1>Lead lists</h1><p>Organize the people you want to start a conversation with.</p></div></div>
       <CreateListForm />
 
       {lists.length === 0 ? (
-        <p className="text-muted-foreground">No lists yet. Create one to import leads into.</p>
+        <div className="empty-state bg-card"><h2 className="font-medium">Make room for your next conversation</h2><p>Create your first list above, then import your contacts from a CSV file.</p></div>
       ) : (
         <ul className="divide-y rounded-md border">
           {lists.map((list) => (

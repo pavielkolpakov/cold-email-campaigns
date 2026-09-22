@@ -13,8 +13,8 @@ export default async function CampaignsPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Campaigns</h1>
+    <div className="space-y-8">
+      <div className="page-heading"><div><h1>Campaigns</h1><p>Bring your audience, sequence, and mailbox together.</p></div></div>
 
       <CampaignForm
         sequences={sequences?.sequences ?? []}

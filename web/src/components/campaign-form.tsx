@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -49,9 +52,26 @@ export function CampaignForm({
 
   if (!ready) {
     return (
-      <p className="text-muted-foreground">
-        A campaign needs a sequence, a lead list and a connected mailbox first.
-      </p>
+      <section className="panel overflow-hidden">
+        <div className="border-b p-6 sm:p-8">
+          <p className="eyebrow mb-3">Before your first send</p>
+          <h2 className="text-xl font-medium tracking-tight">A little setup. A better first impression.</h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Every campaign starts with three things: a sending address, the right people, and a message worth opening.</p>
+        </div>
+        <div className="divide-y">
+          {[
+            { number: "01", title: "Connect a mailbox", detail: "Send from your own email address.", href: "/mailboxes", done: mailboxes.length > 0 },
+            { number: "02", title: "Build a lead list", detail: "Import and organize your contacts.", href: "/leads", done: lists.length > 0 },
+            { number: "03", title: "Write a sequence", detail: "Create your message and follow-ups.", href: "/sequences", done: sequences.length > 0 },
+          ].map((step) => (
+            <Link key={step.number} href={step.href} className="flex items-center gap-4 p-6 transition-colors hover:bg-muted sm:gap-6 sm:px-8">
+              <span className="font-mono text-xs text-muted-foreground">{step.number}</span>
+              <div className="flex-1"><h3 className="font-medium">{step.title}</h3><p className="mt-1 text-sm text-muted-foreground">{step.detail}</p></div>
+              {step.done ? <span className="font-mono text-[11px] text-[#297a3a]">Ready ✓</span> : <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />}
+            </Link>
+          ))}
+        </div>
+      </section>
     );
   }
 
