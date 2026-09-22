@@ -117,18 +117,18 @@ and backed by Postgres RLS policies as a second line.
 ## Implementation Phases
 
 ### Phase 1 — Foundation
-- [ ] Monorepo scaffold: `/api` (cargo), `/web` (Next.js), `/migrations`, root `docker-compose.yml` with Postgres + Mailpit.
-- [ ] SQLx migration runner wired into startup; first migration creates `orgs`, `users`, `sessions`.
-- [ ] Axum skeleton with mode dispatch (`api` / `worker` / `scheduler`), structured logging, `/health`.
-- [ ] Signup (creates org + owner user), login, logout; argon2 hashing; httpOnly session cookie.
-- [ ] Auth extractor that yields `(user, org_id)`; org-scoped repository layer; RLS policies.
-- [ ] Next.js app shell: login/signup pages, authenticated layout, nav, empty dashboard.
+- [x] Monorepo scaffold: `/api` (cargo), `/web` (Next.js), `/migrations`, root `docker-compose.yml` with Postgres + Mailpit.
+- [x] SQLx migration runner wired into startup; first migration creates `orgs`, `users`, `sessions`.
+- [x] Axum skeleton with mode dispatch (`api` / `worker` / `scheduler`), structured logging, `/health`.
+- [x] Signup (creates org + owner user), login, logout; argon2 hashing; httpOnly session cookie.
+- [x] Auth extractor that yields `(user, org_id)`; org-scoped repository layer. *(RLS policies still open — see Open Questions.)*
+- [x] Next.js app shell: login/signup pages, authenticated layout, nav, empty dashboard.
 - [ ] Railway project: Postgres, api service, web service; env config; deploy.
 - [ ] **Verify:** signup → login → dashboard works on the live Railway URL; a second org cannot read the first org's rows (integration test).
 
 ### Phase 2 — Mailboxes & Leads
 - [x] `MailProvider` trait (`send`, `fetch_messages`, `refresh_auth`) + `GmailProvider`.
-- [ ] Google Cloud project, OAuth consent screen, scopes `gmail.send` + `gmail.readonly`.
+- [ ] Google Cloud project, OAuth consent screen, scopes `gmail.send` + `gmail.readonly`. *(Yours to create; see README.)*
 - [x] OAuth connect flow with state param; token encryption at rest; refresh-on-expiry helper.
 - [x] Mailbox list UI: connect, disconnect, status, daily cap. *(Sending window and timezone move to Phase 3, where the scheduler actually reads them.)*
 - [x] "Send test email" action proving the round trip.
@@ -172,4 +172,7 @@ and backed by Postgres RLS policies as a second line.
 - **Lead timezone source.** Business-hours sending needs a timezone per lead. Options: a CSV column, inference from country, or falling back to the mailbox's timezone. v1 falls back to the mailbox; revisit if it matters.
 - **Reply matching without thread IDs.** Fine for Gmail. When SMTP/IMAP lands, matching will need `Message-ID` / `References` header tracking — worth keeping those columns on `messages` from the start.
 - **Open tracking.** Deliberately out of v1: tracking pixels hurt deliverability and Apple Mail Privacy Protection makes open rates close to meaningless. Revisit only if a customer demands the number.
+- **Postgres RLS.** Still unimplemented. `force row level security` does not apply to superusers, and the local/Railway Postgres role is one, so enforcing it needs a separate non-superuser app role (migrations as owner, runtime as `app`) and a second test pool. Org scoping is currently enforced in the repository layer and covered by tests; decide before Phase 3 whether the second line of defence is worth that plumbing.
+- **Import writes one row per query.** Fine for the list sizes seen so far; becomes the bottleneck somewhere in the thousands. Batch inserts when it shows up in practice, not before.
+- **A lead belongs to exactly one list.** `leads` carries `list_id` and is unique per org, so importing the same address into a second list reports it as a duplicate rather than adding it twice. If a prospect needs to sit in several lists, that becomes a join table.
 - **Sending concurrency ceiling.** How many mailboxes one worker process should handle before adding a second Railway replica — measure at Phase 3 rather than guessing now.
