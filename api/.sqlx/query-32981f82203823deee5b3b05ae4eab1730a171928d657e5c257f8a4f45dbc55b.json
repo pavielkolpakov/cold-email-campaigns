@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select status from mailboxes limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "32981f82203823deee5b3b05ae4eab1730a171928d657e5c257f8a4f45dbc55b"
+}

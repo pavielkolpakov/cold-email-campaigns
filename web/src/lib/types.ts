@@ -57,3 +57,29 @@ export type CampaignStats = {
   bounced: number;
   failed: number;
 };
+
+export type DashboardSummary = {
+  active_campaigns: number;
+  mailboxes: {
+    id: string;
+    email: string;
+    status: string;
+    daily_cap: number;
+    sent_today: number;
+  }[];
+  recent_replies: { lead_email: string; campaign_name: string; replied_at: string }[];
+  problems: {
+    campaign_id: string;
+    campaign_name: string;
+    lead_email: string;
+    error: string;
+  }[];
+};
+
+export type Invite = {
+  id: string;
+  email: string;
+  role: string;
+  token: string;
+  accepted_at: string | null;
+};

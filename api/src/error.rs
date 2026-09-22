@@ -12,6 +12,8 @@ pub enum AppError {
     #[error("authentication required")]
     Unauthorized,
     #[error("{0}")]
+    Forbidden(String),
+    #[error("{0}")]
     Conflict(String),
     /// The upstream mail provider refused. Its message is operator-facing and
     /// usually actionable ("enable the Gmail API"), so it is passed through.
@@ -32,6 +34,7 @@ impl IntoResponse for AppError {
         let status = match &self {
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::InvalidCredentials | AppError::Unauthorized => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::Provider(_) => StatusCode::BAD_GATEWAY,
             AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        update jobs\n        set status = 'pending', scheduled_at = $2, locked_at = null, locked_by = null,\n            attempts = greatest(attempts - 1, 0),\n            last_error = 'deferred: provider asked us to wait'\n        where id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6da7b8d038bc20e2438d5e00e0c57c78a64b2d9c032b484fe7e0c6fdb734b8d1"
+}

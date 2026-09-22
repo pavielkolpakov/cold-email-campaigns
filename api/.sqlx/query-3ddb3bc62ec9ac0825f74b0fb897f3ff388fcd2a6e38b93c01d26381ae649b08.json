@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update jobs set status = 'running', locked_at = now() - interval '30 minutes',\n         locked_by = 'worker-that-died', attempts = 5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3ddb3bc62ec9ac0825f74b0fb897f3ff388fcd2a6e38b93c01d26381ae649b08"
+}

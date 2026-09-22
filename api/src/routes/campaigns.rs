@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/campaigns/{id}/pause", post(pause))
         .route("/campaigns/{id}/resume", post(resume))
         .route("/suppressions", get(list_suppressions))
+        .route("/dashboard", get(dashboard))
         // Public: a recipient clicking from their inbox has no session.
         .route("/unsubscribe/{token}", post(unsubscribe))
 }
@@ -157,4 +158,11 @@ async fn unsubscribe(
         .await
         .map_err(|err| AppError::BadRequest(err.to_string()))?;
     Ok(Json(json!({ "ok": true })))
+}
+
+async fn dashboard(State(state): State<AppState>, user: CurrentUser) -> AppResult<Json<Value>> {
+    let summary = crate::dashboard::summary(&state.pool, user.org_id)
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(json!({ "summary": summary })))
 }

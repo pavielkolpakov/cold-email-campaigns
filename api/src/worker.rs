@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::crypto::Cipher;
 use crate::mailboxes;
-use crate::provider::{Mailer, OutboundMessage, TokenRefresher};
+use crate::provider::{Mailer, MailerError, OutboundMessage, TokenRefresher};
 use crate::render::{self, MergeValues};
 use crate::state::AppState;
 
@@ -22,8 +22,29 @@ const DEFAULT_APP_URL: &str = "http://localhost:3000";
 enum SendError {
     #[error("{0}")]
     Permanent(String),
+    /// Throttled. Not a failure of ours, so it neither fails the lead nor
+    /// spends one of its retries.
+    #[error("rate limited")]
+    RateLimited { retry_after: Option<Duration> },
+    /// The mailbox stopped being usable mid-send.
+    #[error("the mailbox is no longer authorized")]
+    Unauthorized,
     #[error(transparent)]
     Transient(#[from] anyhow::Error),
+}
+
+impl From<MailerError> for SendError {
+    fn from(err: MailerError) -> Self {
+        match err {
+            MailerError::RateLimited { retry_after } => Self::RateLimited {
+                retry_after: retry_after
+                    .and_then(|after| Duration::from_std(after).ok()),
+            },
+            MailerError::InvalidRecipient(message) => Self::Permanent(message),
+            MailerError::Unauthorized => Self::Unauthorized,
+            MailerError::Other(err) => Self::Transient(err),
+        }
+    }
 }
 
 impl From<sqlx::Error> for SendError {
@@ -88,6 +109,20 @@ pub async fn run_once_with_url(
                     .execute(pool)
                     .await?;
                 processed += 1;
+            }
+            Err(SendError::RateLimited { retry_after }) => {
+                defer(pool, &job, retry_after.unwrap_or(Duration::minutes(5))).await?;
+            }
+            Err(SendError::Unauthorized) => {
+                // Every other send from this mailbox will fail the same way.
+                sqlx::query!(
+                    "update mailboxes set status = 'disconnected', updated_at = now() where id = $1",
+                    job.mailbox_id,
+                )
+                .execute(pool)
+                .await?;
+                defer(pool, &job, Duration::minutes(5)).await?;
+                tracing::error!(mailbox = %job.mailbox_id, "mailbox deauthorized mid-send");
             }
             Err(error) => {
                 let permanent = matches!(error, SendError::Permanent(_));
@@ -406,6 +441,25 @@ async fn sent_today(pool: &PgPool, mailbox_id: Uuid) -> Result<i64> {
     .fetch_one(pool)
     .await?;
     Ok(count.unwrap_or(0))
+}
+
+/// Puts a job back without spending an attempt, for when the provider asked us
+/// to wait rather than the send being wrong.
+async fn defer(pool: &PgPool, job: &SendJob, wait: Duration) -> Result<()> {
+    sqlx::query!(
+        r#"
+        update jobs
+        set status = 'pending', scheduled_at = $2, locked_at = null, locked_by = null,
+            attempts = greatest(attempts - 1, 0),
+            last_error = 'deferred: provider asked us to wait'
+        where id = $1
+        "#,
+        job.job_id,
+        Utc::now() + wait,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 /// Retries with a widening backoff, then gives up and surfaces the error.

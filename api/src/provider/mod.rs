@@ -49,6 +49,26 @@ pub struct SentMessage {
     pub message_id_header: String,
 }
 
+/// Why a send failed, in terms the worker can act on. An opaque error would
+/// make every failure look alike, and the right response differs sharply:
+/// wait, give up on this lead, or tell the user to reconnect.
+#[derive(Debug, thiserror::Error)]
+pub enum MailerError {
+    /// The provider is throttling us. Not the lead's fault and not a failure.
+    #[error("rate limited by the provider")]
+    RateLimited {
+        retry_after: Option<std::time::Duration>,
+    },
+    /// The provider will not accept this address, however often we ask.
+    #[error("{0}")]
+    InvalidRecipient(String),
+    /// The token stopped working mid-send.
+    #[error("the mailbox is no longer authorized")]
+    Unauthorized,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
 /// Sends on behalf of a connected mailbox. The seam that keeps campaign logic
 /// independent of Gmail, Outlook or SMTP.
 #[async_trait::async_trait]
@@ -58,7 +78,7 @@ pub trait Mailer: Send + Sync {
         from: &str,
         credentials: &crate::mailboxes::Credentials,
         message: &OutboundMessage,
-    ) -> anyhow::Result<SentMessage>;
+    ) -> Result<SentMessage, MailerError>;
 }
 
 /// One page of a mailbox's recent messages, plus the cursor to resume from.

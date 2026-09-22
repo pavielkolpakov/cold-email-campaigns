@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update invites set expires_at = now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5f2c9c93b68e66b27680a44ee66826418429a1cc36f2c0176762439cf65e6e68"
+}

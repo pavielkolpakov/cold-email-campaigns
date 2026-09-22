@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update jobs set status = 'running', locked_at = now(), locked_by = 'worker-busy'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9ffa76795d4546e25a7d8300ffd4ea6545319003846abaa9a737f862f4a6d2e1"
+}

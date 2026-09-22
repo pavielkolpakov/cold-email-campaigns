@@ -191,6 +191,7 @@ pub async fn send_test_email(
             },
         )
         .await
+        .map_err(|err| anyhow!("{err}"))
 }
 
 pub async fn disconnect(pool: &PgPool, org_id: Uuid, mailbox_id: Uuid) -> Result<()> {

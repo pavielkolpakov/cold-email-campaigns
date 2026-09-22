@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update invites set accepted_at = now() where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c9b0ff043bc23eb160d48921421d2f38b00ade51c743c9d82c95fe9c7c51169"
+}

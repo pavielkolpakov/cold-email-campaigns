@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use api::crypto::Cipher;
 use api::provider::gmail::{GmailInbox, GmailMailer, GmailOAuth};
-use api::{config, routes, scheduler, state, worker};
+use api::{config, routes, scheduler, seed, state, worker};
 use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
         "api" => routes::serve(state).await,
         "worker" => worker::run(state).await,
         "scheduler" => scheduler::run(state).await,
-        other => anyhow::bail!("unknown mode `{other}` (expected api, worker, or scheduler)"),
+        "seed" => seed::run(&state.pool).await,
+        other => anyhow::bail!("unknown mode `{other}` (expected api, worker, scheduler, or seed)"),
     }
 }

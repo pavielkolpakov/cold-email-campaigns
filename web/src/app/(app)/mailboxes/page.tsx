@@ -1,3 +1,4 @@
+import { DisconnectedBanner } from "@/components/disconnected-banner";
 import { MailboxList } from "@/components/mailbox-list";
 import { serverFetch } from "@/lib/server-api";
 import type { Mailbox } from "@/lib/types";
@@ -21,6 +22,8 @@ export default async function MailboxesPage({
           Connect Gmail
         </a>
       </div>
+
+      <DisconnectedBanner mailboxes={data?.mailboxes ?? []} />
 
       {connected && <p className="text-sm">Mailbox connected.</p>}
       {error && <p className="text-sm text-destructive">Connection was cancelled.</p>}

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select l.email as lead_email, c.name as campaign_name, cl.replied_at as \"replied_at!\"\n        from campaign_leads cl\n        join campaigns c on c.id = cl.campaign_id\n        join leads l on l.id = cl.lead_id\n        where c.org_id = $1 and cl.replied_at is not null\n        order by cl.replied_at desc\n        limit 10\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lead_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "leads",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "campaign_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "campaigns",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "replied_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "campaign_leads",
+            "name": "replied_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1cf1f99b58126c0e4699932887c6ff42aac72ee239bcd1d87b8d7959c52505d4"
+}

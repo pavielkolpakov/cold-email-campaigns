@@ -780,3 +780,166 @@ async fn a_disconnected_mailbox_is_not_synced(pool: PgPool) {
             .is_empty()
     );
 }
+
+#[sqlx::test]
+async fn a_job_abandoned_by_a_dead_worker_is_picked_up_again(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    // A worker claims everything, then dies before sending.
+    sqlx::query!(
+        "update jobs set status = 'running', locked_at = now() - interval '30 minutes',
+         locked_by = 'worker-that-died', attempts = 1"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mailer = FakeMailer::default();
+    assert_eq!(work(&pool, &mailer).await, 0, "nothing is claimable yet");
+
+    let requeued = api::scheduler::requeue_stale_jobs(&pool, chrono::Duration::minutes(10))
+        .await
+        .unwrap();
+    assert_eq!(requeued, 3);
+
+    assert_eq!(work(&pool, &mailer).await, 3, "the sends must not be lost");
+}
+
+#[sqlx::test]
+async fn a_job_still_in_flight_is_left_alone(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    sqlx::query!(
+        "update jobs set status = 'running', locked_at = now(), locked_by = 'worker-busy'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let requeued = api::scheduler::requeue_stale_jobs(&pool, chrono::Duration::minutes(10))
+        .await
+        .unwrap();
+    assert_eq!(requeued, 0, "a slow send is not an abandoned one");
+}
+
+#[sqlx::test]
+async fn a_job_that_keeps_being_abandoned_eventually_fails(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    // Already exhausted its attempts while being repeatedly orphaned.
+    sqlx::query!(
+        "update jobs set status = 'running', locked_at = now() - interval '30 minutes',
+         locked_by = 'worker-that-died', attempts = 5"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    api::scheduler::requeue_stale_jobs(&pool, chrono::Duration::minutes(10))
+        .await
+        .unwrap();
+
+    let failed = sqlx::query_scalar!("select count(*) from jobs where status = 'failed'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(failed, Some(3), "an endless requeue loop helps nobody");
+}
+
+use api::provider::MailerError;
+use support::FailingMailer;
+use std::sync::atomic::Ordering;
+
+#[sqlx::test]
+async fn being_rate_limited_waits_without_spending_an_attempt(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    let mailer = FailingMailer::new(|| MailerError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(120)),
+    });
+    api::worker::run_once(&pool, &cipher(), &NeverRefreshes, &mailer, "worker-1", 10)
+        .await
+        .unwrap();
+
+    assert_eq!(mailer.calls.load(Ordering::SeqCst), 3);
+
+    // Gmail throttling us is not the lead's fault: the retry budget is intact
+    // and the work is simply deferred.
+    let rows = sqlx::query!("select status, attempts, scheduled_at from jobs")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 3);
+    for row in &rows {
+        assert_eq!(row.status, "pending");
+        assert_eq!(row.attempts, 0, "a throttle must not count against retries");
+        assert!(row.scheduled_at > Utc::now() + ChronoDuration::seconds(60));
+    }
+
+    let stats = campaigns::stats(&pool, org_id, campaigns::list(&pool, org_id).await.unwrap()[0].id)
+        .await
+        .unwrap();
+    assert_eq!(stats.failed, 0);
+}
+
+#[sqlx::test]
+async fn an_address_gmail_rejects_fails_that_lead_immediately(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    let campaign_id = launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    let mailer = FailingMailer::new(|| MailerError::InvalidRecipient("invalid to header".into()));
+    api::worker::run_once(&pool, &cipher(), &NeverRefreshes, &mailer, "worker-1", 10)
+        .await
+        .unwrap();
+
+    let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
+    assert_eq!(stats.failed, 3, "retrying a malformed address never helps");
+    assert_eq!(mailer.calls.load(Ordering::SeqCst), 3);
+}
+
+#[sqlx::test]
+async fn a_token_revoked_mid_send_disconnects_the_mailbox(pool: PgPool) {
+    let org_id = seed_org(&pool, "Acme").await;
+    launched_campaign(&pool, org_id).await;
+    api::scheduler::enqueue_due(&pool).await.unwrap();
+
+    let mailer = FailingMailer::new(|| MailerError::Unauthorized);
+    api::worker::run_once(&pool, &cipher(), &NeverRefreshes, &mailer, "worker-1", 10)
+        .await
+        .unwrap();
+
+    let status = sqlx::query_scalar!("select status from mailboxes limit 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        status, "disconnected",
+        "the user must be told to reconnect rather than watch sends fail"
+    );
+}
+
+#[sqlx::test]
+async fn the_dashboard_only_counts_its_own_org(pool: PgPool) {
+    let acme = seed_org(&pool, "Acme").await;
+    let globex = seed_org(&pool, "Globex").await;
+    send_first_step(&pool, acme).await;
+
+    let acme_summary = api::dashboard::summary(&pool, acme).await.unwrap();
+    assert_eq!(acme_summary.active_campaigns, 1);
+    assert_eq!(acme_summary.mailboxes.len(), 1);
+    assert_eq!(acme_summary.mailboxes[0].sent_today, 3);
+
+    let globex_summary = api::dashboard::summary(&pool, globex).await.unwrap();
+    assert_eq!(globex_summary.active_campaigns, 0);
+    assert!(globex_summary.mailboxes.is_empty());
+    assert!(globex_summary.recent_replies.is_empty());
+}

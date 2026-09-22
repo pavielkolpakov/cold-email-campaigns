@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        update jobs\n        set status = 'pending', locked_at = null, locked_by = null,\n            last_error = 'requeued after its worker stopped responding'\n        where status = 'running'\n          and locked_at < now() - $1::interval\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b6566b861892b7c63faa875a1b73286d5fd3d7ce62cf357203737d480954842"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        update jobs\n        set status = 'failed',\n            last_error = 'abandoned by its worker and out of attempts'\n        where status = 'running'\n          and locked_at < now() - $1::interval\n          and attempts >= 5\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fdec946487a281eba09ac1ba472fa10bc903906145d3a708de437d5bafbe7d5b"
+}

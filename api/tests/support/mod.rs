@@ -18,7 +18,7 @@ pub async fn seed_org(pool: &PgPool, name: &str) -> Uuid {
 }
 
 use api::mailboxes::Credentials;
-use api::provider::{Mailer, OutboundMessage, SentMessage};
+use api::provider::{Mailer, MailerError, OutboundMessage, SentMessage};
 use std::sync::Mutex;
 
 /// Records what would have been sent, so tests can assert on it.
@@ -34,7 +34,7 @@ impl Mailer for FakeMailer {
         from: &str,
         credentials: &Credentials,
         message: &OutboundMessage,
-    ) -> anyhow::Result<SentMessage> {
+    ) -> Result<SentMessage, MailerError> {
         self.sent
             .lock()
             .unwrap()
@@ -132,5 +132,35 @@ pub fn inbound(thread: &str, from: &str, headers: &[(&str, &str)]) -> InboundMes
             .map(|(key, value)| (key.to_lowercase(), value.to_string()))
             .collect::<BTreeMap<_, _>>(),
         received_at: Utc::now(),
+    }
+}
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Fails every send with a preset provider error, counting the attempts.
+pub struct FailingMailer {
+    pub calls: AtomicUsize,
+    make_error: Box<dyn Fn() -> MailerError + Send + Sync>,
+}
+
+impl FailingMailer {
+    pub fn new(make_error: impl Fn() -> MailerError + Send + Sync + 'static) -> Self {
+        Self {
+            calls: AtomicUsize::new(0),
+            make_error: Box::new(make_error),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Mailer for FailingMailer {
+    async fn send(
+        &self,
+        _from: &str,
+        _credentials: &Credentials,
+        _message: &OutboundMessage,
+    ) -> Result<SentMessage, MailerError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Err((self.make_error)())
     }
 }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update mailboxes set status = 'disconnected', updated_at = now() where id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce9702fcb7206123db5f067283b8ee6358b8c7efc01749014318575eaac0cf0a"
+}

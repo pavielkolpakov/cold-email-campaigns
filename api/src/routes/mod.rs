@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod campaigns;
+pub mod invites;
 pub mod leads;
 pub mod mailboxes;
 
@@ -35,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .merge(mailboxes::routes())
         .merge(leads::routes())
         .merge(campaigns::routes())
+        .merge(invites::routes())
         .layer(RequestBodyLimitLayer::new(MAX_BODY_BYTES))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

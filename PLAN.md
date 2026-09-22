@@ -161,13 +161,16 @@ and backed by Postgres RLS policies as a second line.
 - [x] **Verify (live):** replied to a real campaign email from Gmail; the worker marked the lead `replied` within one sync cycle (`inbox synced replies=1`), cleared `next_run_at`, and the followup — which said "IF YOU ARE READING THIS, REPLY DETECTION FAILED" — never sent. *Auto-reply and bounce paths are covered by tests only; neither has been seen against real Gmail.*
 
 ### Phase 5 — Polish & Launch
-- [~] Error surfaces: mailbox disconnected / quota exceeded / token revoked shown in the UI with a fix action. *(Started: provider failures now return 502 carrying Google's own message instead of a bare 500, a foreign mailbox says "mailbox not found" rather than leaking sqlx, and an unreachable API names itself. The UI fix actions are still to do.)*
-- [ ] Gmail rate-limit handling with backoff and per-mailbox concurrency ceiling.
-- [ ] Team invites and a basic owner/member role split.
-- [ ] Dashboard: active campaigns, today's sends against cap, recent replies.
-- [ ] Seed script + end-to-end test against Mailpit covering the full loop.
-- [ ] Google OAuth verification submission for the restricted scopes.
-- [ ] **Verify:** full loop green in CI against Mailpit; a revoked token produces a clear UI state instead of silent failure.
+- [x] Error surfaces: disconnected-mailbox banner with a Reconnect action on the dashboard and mailboxes pages; a "needs attention" list of leads that failed and why; provider failures return 502 carrying Google's own message; an unreachable API names itself.
+- [x] Gmail rate-limit handling with backoff. *(A 429, or a 403 with a rate-limit reason, defers the job by `Retry-After` and gives back the attempt it spent — throttling is not the lead's fault. A 400 fails that lead outright, since a malformed address never improves. A 401 mid-send disconnects the mailbox.)*
+- [x] Team invites and a basic owner/member role split. *(Only an owner may invite or revoke. The invite carries the org and the email, so accepting cannot land someone in a different org or under a different address.)*
+- [x] Dashboard: active campaigns, today's sends against cap, recent replies, and what needs attention.
+- [x] Stale-lease sweeper: jobs abandoned by a dead worker return to the queue; ones out of attempts fail rather than loop. *(Was an open gap from Phase 3.)*
+- [x] Seed script — `cargo run -- seed` builds a demo org, leads and a sequence through the same functions the app uses, so it cannot drift.
+- [ ] Google OAuth verification submission for the restricted scopes. *(Yours to submit; app is still in Testing mode.)*
+- [x] **Verify (live):** invite created, accepted in a browser, joined the right org as a member, and the Team page refuses them. Rate-limit, invalid-recipient and mid-send revocation are covered by tests against a failing mailer.
+
+  **Dropped: the Mailpit end-to-end test.** Mailpit speaks SMTP and v1 has no SMTP provider — the plan carried this over from a stack assumption that the Gmail-only decision invalidated. The full loop is already covered end to end against the in-memory mailer, and against real Gmail by hand. Revisit when `SmtpProvider` lands.
 
 ## Verified against live Gmail
 
@@ -189,6 +192,8 @@ in-memory fake:
 | Multi-day delays, daily cap, worker kill | **tests only** |
 | Unsubscribe link through a real mail client | **not verified** |
 | SPF/DKIM/DMARC, spam placement | **not verified** |
+| Invite created, accepted, role enforced | live |
+| Rate limit, invalid recipient, mid-send revocation | **tests only** |
 
 ## Open Questions
 
@@ -198,9 +203,9 @@ in-memory fake:
 - **Reply matching without thread IDs.** Fine for Gmail. When SMTP/IMAP lands, matching will need `Message-ID` / `References` header tracking — worth keeping those columns on `messages` from the start.
 - **Open tracking.** Deliberately out of v1: tracking pixels hurt deliverability and Apple Mail Privacy Protection makes open rates close to meaningless. Revisit only if a customer demands the number.
 - **Business-hours window and jitter are not implemented.** The worker sends as soon as a job is claimed. Both need a timezone to be meaningful, and the lead timezone question below is still open; doing it against the mailbox timezone alone is a half-measure worth deciding on deliberately.
-- **Stale-lease requeue is missing.** A worker killed mid-send leaves its job `running` forever. A sweeper that returns jobs locked longer than N minutes to `pending` is a few lines, but needs a lease window chosen against real send latency.
 - **The daily cap counts sends across the whole day, not a rolling window,** and resets at UTC midnight rather than the mailbox's local midnight.
 - **Postgres RLS.** Still unimplemented. `force row level security` does not apply to superusers, and the local/Railway Postgres role is one, so enforcing it needs a separate non-superuser app role (migrations as owner, runtime as `app`) and a second test pool. Org scoping is currently enforced in the repository layer and covered by tests; decide before Phase 3 whether the second line of defence is worth that plumbing.
 - **Import writes one row per query.** Fine for the list sizes seen so far; becomes the bottleneck somewhere in the thousands. Batch inserts when it shows up in practice, not before.
 - **A lead belongs to exactly one list.** `leads` carries `list_id` and is unique per org, so importing the same address into a second list reports it as a duplicate rather than adding it twice. If a prospect needs to sit in several lists, that becomes a join table.
-- **Sending concurrency ceiling.** How many mailboxes one worker process should handle before adding a second Railway replica — measure at Phase 3 rather than guessing now.
+- **Sending concurrency ceiling.** Not built. A worker processes its claimed jobs one at a time, so a single worker is already a ceiling of one send at a time per process; a real per-mailbox limit across several workers needs coordination none of this has yet. Measure before building it.
+- **Invites are not emailed.** The owner copies a link and sends it themselves. Mailing it would mean sending transactional email from the product's own domain, which is a separate sender identity from the customer's connected mailbox.

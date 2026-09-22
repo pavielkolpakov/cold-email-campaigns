@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select\n            m.id,\n            m.email,\n            m.status,\n            m.daily_cap,\n            (\n                select count(*)\n                from messages msg\n                join campaign_leads cl on cl.id = msg.campaign_lead_id\n                join campaigns c on c.id = cl.campaign_id\n                where c.mailbox_id = m.id and msg.sent_at >= date_trunc('day', now())\n            ) as \"sent_today!\"\n        from mailboxes m\n        where m.org_id = $1\n        order by m.email\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "daily_cap",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "daily_cap"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "sent_today!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "39b3bcaf17a971610a6a9f7112afda981c5f31b6c7ccf9d0a70d8581c1bba49a"
+}

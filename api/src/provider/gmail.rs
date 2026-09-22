@@ -78,7 +78,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64_URL;
 
 use crate::mailboxes::Credentials;
-use crate::provider::{Mailer, OutboundMessage, SentMessage};
+use crate::provider::{Mailer, MailerError, OutboundMessage, SentMessage};
 
 pub const GOOGLE_AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 pub const GMAIL_API_BASE: &str = "https://gmail.googleapis.com/gmail/v1";
@@ -189,7 +189,7 @@ impl Mailer for GmailMailer {
         from: &str,
         credentials: &Credentials,
         message: &OutboundMessage,
-    ) -> anyhow::Result<SentMessage> {
+    ) -> Result<SentMessage, MailerError> {
         #[derive(Deserialize)]
         struct SendResponse {
             id: String,
@@ -229,15 +229,25 @@ impl Mailer for GmailMailer {
             .bearer_auth(&credentials.access_token)
             .json(&payload)
             .send()
-            .await?;
+            .await
+            .map_err(|err| MailerError::Other(err.into()))?;
 
         if !response.status().is_success() {
             let status = response.status();
+            let retry_after = response
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u64>().ok())
+                .map(std::time::Duration::from_secs);
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!("gmail send failed ({status}): {}", google_message(&body)));
+            return Err(classify_send_failure(status, retry_after, &body));
         }
 
-        let sent: SendResponse = response.json().await?;
+        let sent: SendResponse = response
+            .json()
+            .await
+            .map_err(|err| MailerError::Other(err.into()))?;
         Ok(SentMessage {
             provider_message_id: sent.id,
             thread_id: sent.thread_id,
@@ -465,4 +475,35 @@ fn extract_address(from: &str) -> String {
         (Some(start), Some(end)) if start < end => from[start + 1..end].trim().to_lowercase(),
         _ => from.trim().to_lowercase(),
     }
+}
+
+/// Maps Gmail's refusal onto something the worker can act on. Google signals
+/// throttling with 429, and also with 403 plus a rate-limit reason, so the
+/// status alone is not enough.
+fn classify_send_failure(
+    status: reqwest::StatusCode,
+    retry_after: Option<std::time::Duration>,
+    body: &str,
+) -> MailerError {
+    let message = google_message(body);
+    let lower = message.to_lowercase();
+
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || lower.contains("ratelimitexceeded")
+        || lower.contains("rate limit")
+        || lower.contains("user-rate limit")
+    {
+        return MailerError::RateLimited { retry_after };
+    }
+    if status == reqwest::StatusCode::UNAUTHORIZED
+        || lower.contains("invalid credentials")
+        || lower.contains("invalid_grant")
+    {
+        return MailerError::Unauthorized;
+    }
+    if status == reqwest::StatusCode::BAD_REQUEST {
+        return MailerError::InvalidRecipient(message);
+    }
+
+    MailerError::Other(anyhow!("gmail send failed ({status}): {message}"))
 }
