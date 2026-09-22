@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
+use api::crypto::Cipher;
+use api::provider::gmail::{GmailMailer, GmailOAuth};
 use api::{config, routes, scheduler, state, worker};
+use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
@@ -22,7 +25,23 @@ async fn main() -> Result<()> {
         .await
         .context("failed to run migrations")?;
 
-    let state = state::AppState { pool, config };
+    let cipher = Cipher::from_base64_key(&config.encryption_key)?;
+    let oauth = Arc::new(GmailOAuth::new(
+        config.google_client_id.clone(),
+        config.google_client_secret.clone(),
+        api::provider::gmail::GOOGLE_TOKEN_ENDPOINT.to_string(),
+    ));
+    if !config.google_configured() {
+        tracing::warn!("GOOGLE_CLIENT_ID/SECRET are unset; mailboxes cannot be connected");
+    }
+
+    let state = state::AppState {
+        pool,
+        config,
+        cipher,
+        oauth,
+        mailer: Arc::new(GmailMailer::default()),
+    };
 
     // One binary, three modes: `api`, `worker`, `scheduler`.
     match std::env::args().nth(1).as_deref().unwrap_or("api") {

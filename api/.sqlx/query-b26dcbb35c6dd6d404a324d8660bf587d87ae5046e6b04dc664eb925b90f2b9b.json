@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            insert into leads (org_id, list_id, email, first_name, last_name, company, custom)\n            values ($1, $2, $3, $4, $5, $6, $7)\n            on conflict do nothing\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b26dcbb35c6dd6d404a324d8660bf587d87ae5046e6b04dc664eb925b90f2b9b"
+}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        update mailboxes\n        set access_token_enc = $1, token_expires_at = $2, updated_at = now()\n        where id = $3 and org_id = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3a493245a6ebc47cdf3c2580f86614c9e19c13304d50501e20f735364ef9b71"
+}

@@ -1,6 +1,5 @@
-use api::config::Config;
-use api::routes::router;
-use api::state::AppState;
+mod support;
+
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
@@ -10,14 +9,7 @@ use sqlx::PgPool;
 use tower::ServiceExt;
 
 fn app(pool: PgPool) -> Router {
-    let config = Config {
-        database_url: String::new(),
-        api_bind: "127.0.0.1:0".into(),
-        app_url: "http://localhost:3000".into(),
-        session_cookie_name: "ce_session".into(),
-        session_ttl_days: 30,
-    };
-    router(AppState { pool, config })
+    support::test_app(pool, std::sync::Arc::new(support::FakeMailer::default()))
 }
 
 async fn post(app: &Router, path: &str, body: Value) -> (StatusCode, Option<String>, Value) {

@@ -1,13 +1,21 @@
-use anyhow::Context;
+use axum::Router;
 use axum::extract::State;
-use axum::http::{HeaderValue, Method, header};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+
+use crate::state::AppState;
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/auth/signup", post(signup))
+        .route("/auth/login", post(login))
+        .route("/auth/logout", post(logout))
+        .route("/auth/me", get(me))
+}
+
+use axum::Json;
 use axum_extra::extract::cookie::CookieJar;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 use crate::auth::{
@@ -15,43 +23,8 @@ use crate::auth::{
     session_cookie, verify_password,
 };
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
 
-pub fn router(state: AppState) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(
-            state
-                .config
-                .app_url
-                .parse::<HeaderValue>()
-                .expect("APP_URL must be a valid origin"),
-        )
-        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
-        .allow_headers([header::CONTENT_TYPE])
-        .allow_credentials(true);
-
-    Router::new()
-        .route("/health", get(health))
-        .route("/auth/signup", post(signup))
-        .route("/auth/login", post(login))
-        .route("/auth/logout", post(logout))
-        .route("/auth/me", get(me))
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
-}
-
-pub async fn serve(state: AppState) -> anyhow::Result<()> {
-    let bind = state.config.api_bind.clone();
-    let listener = tokio::net::TcpListener::bind(&bind)
-        .await
-        .with_context(|| format!("failed to bind {bind}"))?;
-    tracing::info!(%bind, "api listening");
-    axum::serve(listener, router(state)).await?;
-    Ok(())
-}
-
-async fn health(State(state): State<AppState>) -> AppResult<Json<Value>> {
+pub async fn health(State(state): State<AppState>) -> AppResult<Json<Value>> {
     sqlx::query_scalar!("select 1").fetch_one(&state.pool).await?;
     Ok(Json(json!({ "status": "ok" })))
 }
@@ -71,7 +44,7 @@ struct LoginRequest {
 }
 
 #[derive(Serialize)]
-struct UserResponse {
+pub struct UserResponse {
     id: Uuid,
     org_id: Uuid,
     email: String,

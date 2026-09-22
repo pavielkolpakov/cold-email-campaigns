@@ -8,6 +8,10 @@ pub struct Config {
     pub app_url: String,
     pub session_cookie_name: String,
     pub session_ttl_days: i64,
+    pub encryption_key: String,
+    pub google_client_id: String,
+    pub google_client_secret: String,
+    pub google_redirect_uri: String,
 }
 
 impl Config {
@@ -19,7 +23,17 @@ impl Config {
             session_cookie_name: std::env::var("SESSION_COOKIE_NAME")
                 .unwrap_or_else(|_| "ce_session".into()),
             session_ttl_days: 30,
+            encryption_key: var("ENCRYPTION_KEY")?,
+            google_client_id: std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default(),
+            google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default(),
+            google_redirect_uri: std::env::var("GOOGLE_REDIRECT_URI")
+                .unwrap_or_else(|_| "http://localhost:3000/api/mailboxes/gmail/callback".into()),
         })
+    }
+
+    /// Whether a mailbox can actually be connected on this deployment.
+    pub fn google_configured(&self) -> bool {
+        !self.google_client_id.is_empty() && !self.google_client_secret.is_empty()
     }
 
     pub fn secure_cookies(&self) -> bool {

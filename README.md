@@ -37,3 +37,25 @@ cd api
 sqlx migrate run
 cargo sqlx prepare -- --all-targets
 ```
+
+## Connecting a Gmail mailbox
+
+Mailbox connection needs a Google OAuth client. Until one is configured the
+portal shows a clear "google oauth is not configured" error instead of failing
+silently.
+
+1. Create a project in the Google Cloud Console.
+2. Configure the OAuth consent screen (External). Add yourself as a test user —
+   the app stays limited to 100 test users until Google verifies it.
+3. Add these scopes: `gmail.send`, `gmail.readonly`, `userinfo.email`.
+   The first two are **restricted** and need verification before public use.
+4. Create an OAuth client ID of type *Web application* with the redirect URI
+   `http://localhost:3000/api/mailboxes/gmail/callback`.
+5. Put the client id and secret in `.env`:
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+Tokens are encrypted with `ENCRYPTION_KEY` before they touch the database.

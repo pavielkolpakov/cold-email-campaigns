@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        select access_token_enc, refresh_token_enc, token_expires_at\n        from mailboxes\n        where id = $1 and org_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_token_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "access_token_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "refresh_token_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "refresh_token_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "token_expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "token_expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "65aea7a9fca7d777cee5f8075d214ebc79da8ccf037161d83c57aa9b1fda1335"
+}

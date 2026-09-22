@@ -127,13 +127,13 @@ and backed by Postgres RLS policies as a second line.
 - [ ] **Verify:** signup → login → dashboard works on the live Railway URL; a second org cannot read the first org's rows (integration test).
 
 ### Phase 2 — Mailboxes & Leads
-- [ ] `MailProvider` trait (`send`, `fetch_messages`, `refresh_auth`) + `GmailProvider`.
+- [x] `MailProvider` trait (`send`, `fetch_messages`, `refresh_auth`) + `GmailProvider`.
 - [ ] Google Cloud project, OAuth consent screen, scopes `gmail.send` + `gmail.readonly`.
-- [ ] OAuth connect flow with state param; token encryption at rest; refresh-on-expiry helper.
-- [ ] Mailbox list/detail UI: connect, disconnect, status, daily cap, sending window, timezone.
-- [ ] "Send test email" action proving the round trip.
-- [ ] CSV upload: parse, preview, map columns to fields, import with per-org dedupe on email; unmapped columns land in `custom`.
-- [ ] Lead list + lead table UI with search and status filter.
+- [x] OAuth connect flow with state param; token encryption at rest; refresh-on-expiry helper.
+- [x] Mailbox list UI: connect, disconnect, status, daily cap. *(Sending window and timezone move to Phase 3, where the scheduler actually reads them.)*
+- [x] "Send test email" action proving the round trip.
+- [x] CSV upload: parse, preview, map columns to fields, import with per-org dedupe on email; unmapped columns land in `custom`.
+- [x] Lead list + lead table UI. *(Search and status filter deferred; nothing to filter yet.)*
 - [ ] **Verify:** connect a real Gmail account, send a test email to yourself, import a 100-row CSV with a custom column and see it on the lead detail page.
 
 ### Phase 3 — Sequences & Sending

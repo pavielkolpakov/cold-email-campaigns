@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select email from mailboxes where id = $1 and org_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "mailboxes",
+            "name": "email"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3b1c0888243de90c54c05e4f1c7ee380cc48099bed49da3c3183fd94328ad77b"
+}
