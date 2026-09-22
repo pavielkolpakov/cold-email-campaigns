@@ -37,8 +37,7 @@ impl From<MailerError> for SendError {
     fn from(err: MailerError) -> Self {
         match err {
             MailerError::RateLimited { retry_after } => Self::RateLimited {
-                retry_after: retry_after
-                    .and_then(|after| Duration::from_std(after).ok()),
+                retry_after: retry_after.and_then(|after| Duration::from_std(after).ok()),
             },
             MailerError::InvalidRecipient(message) => Self::Permanent(message),
             MailerError::Unauthorized => Self::Unauthorized,
@@ -85,7 +84,16 @@ pub async fn run_once(
     worker_id: &str,
     limit: i64,
 ) -> Result<usize> {
-    run_once_with_url(pool, cipher, refresher, mailer, DEFAULT_APP_URL, worker_id, limit).await
+    run_once_with_url(
+        pool,
+        cipher,
+        refresher,
+        mailer,
+        DEFAULT_APP_URL,
+        worker_id,
+        limit,
+    )
+    .await
 }
 
 /// Same as [`run_once`], with the base url that unsubscribe links point at.
@@ -463,12 +471,7 @@ async fn defer(pool: &PgPool, job: &SendJob, wait: Duration) -> Result<()> {
 }
 
 /// Retries with a widening backoff, then gives up and surfaces the error.
-async fn record_failure(
-    pool: &PgPool,
-    job: &SendJob,
-    error: &str,
-    permanent: bool,
-) -> Result<()> {
+async fn record_failure(pool: &PgPool, job: &SendJob, error: &str, permanent: bool) -> Result<()> {
     if permanent || job.attempts >= MAX_ATTEMPTS {
         sqlx::query!(
             "update jobs set status = 'failed', last_error = $2 where id = $1",
@@ -539,11 +542,9 @@ pub async fn run(state: AppState) -> Result<()> {
 /// Reads every mailbox that has gone unchecked for a while, so a reply stops
 /// the sequence within a couple of minutes.
 async fn sync_inboxes(state: &AppState) -> Result<()> {
-    let due = crate::sync::claim_due_mailboxes(
-        &state.pool,
-        Duration::minutes(SYNC_INTERVAL_MINUTES),
-    )
-    .await?;
+    let due =
+        crate::sync::claim_due_mailboxes(&state.pool, Duration::minutes(SYNC_INTERVAL_MINUTES))
+            .await?;
 
     for mailbox in due {
         match crate::sync::sync_mailbox(

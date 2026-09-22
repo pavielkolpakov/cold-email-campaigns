@@ -4,8 +4,8 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 use crate::crypto::Cipher;
-use crate::provider::{InboxReader, Mailer};
 use crate::provider::gmail::GmailOAuth;
+use crate::provider::{InboxReader, Mailer};
 
 #[derive(Clone)]
 pub struct AppState {

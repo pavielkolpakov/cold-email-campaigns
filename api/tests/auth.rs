@@ -48,7 +48,10 @@ async fn get_me(app: &Router, cookie: Option<&str>) -> (StatusCode, Value) {
         .unwrap();
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 fn signup_body(org: &str, email: &str) -> Value {
@@ -64,13 +67,17 @@ fn signup_body(org: &str, email: &str) -> Value {
 async fn signup_creates_an_org_and_signs_the_user_in(pool: PgPool) {
     let app = app(pool);
 
-    let (status, cookie, body) = post(&app, "/auth/signup", signup_body("Acme", "ada@acme.com")).await;
+    let (status, cookie, body) =
+        post(&app, "/auth/signup", signup_body("Acme", "ada@acme.com")).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["role"], "owner");
     assert_eq!(body["email"], "ada@acme.com");
 
     let cookie = cookie.expect("signup should set a session cookie");
-    assert!(cookie.contains("HttpOnly"), "session cookie must be HttpOnly");
+    assert!(
+        cookie.contains("HttpOnly"),
+        "session cookie must be HttpOnly"
+    );
     assert!(cookie.contains("SameSite=Lax"));
 
     let (status, me) = get_me(&app, Some(&cookie)).await;
@@ -171,7 +178,12 @@ async fn separate_signups_get_separate_orgs(pool: PgPool) {
     let app = app(pool);
 
     let (_, _, acme) = post(&app, "/auth/signup", signup_body("Acme", "ada@acme.com")).await;
-    let (_, _, globex) = post(&app, "/auth/signup", signup_body("Globex", "hank@globex.com")).await;
+    let (_, _, globex) = post(
+        &app,
+        "/auth/signup",
+        signup_body("Globex", "hank@globex.com"),
+    )
+    .await;
 
     assert_ne!(acme["org_id"], globex["org_id"]);
 }
@@ -209,7 +221,9 @@ async fn google_sign_in_reuses_a_password_account(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_google_only_account_cannot_log_in_with_a_password(pool: PgPool) {
-    api::auth::sign_in_with_google(&pool, "grace@navy.mil", "Grace").await.unwrap();
+    api::auth::sign_in_with_google(&pool, "grace@navy.mil", "Grace")
+        .await
+        .unwrap();
 
     let (status, cookie, _) = post(
         &app(pool),

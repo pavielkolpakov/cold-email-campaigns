@@ -31,7 +31,10 @@ async fn seed_sequence(pool: &PgPool, org_id: Uuid) -> Uuid {
 }
 
 async fn seed_leads(pool: &PgPool, org_id: Uuid, csv: &str) -> Uuid {
-    let list_id = leads::create_list(pool, org_id, "Prospects").await.unwrap().id;
+    let list_id = leads::create_list(pool, org_id, "Prospects")
+        .await
+        .unwrap()
+        .id;
     leads::import_csv(
         pool,
         org_id,
@@ -108,7 +111,9 @@ async fn suppressed_and_unsubscribed_leads_are_never_enrolled(pool: PgPool) {
     let org_id = seed_org(&pool, "Acme").await;
     let list_id = seed_leads(&pool, org_id, THREE_LEADS).await;
 
-    api::suppressions::add(&pool, org_id, "grace@example.com", "manual").await.unwrap();
+    api::suppressions::add(&pool, org_id, "grace@example.com", "manual")
+        .await
+        .unwrap();
     sqlx::query!("update leads set status = 'unsubscribed' where email = 'alan@example.com'")
         .execute(&pool)
         .await
@@ -215,7 +220,7 @@ async fn the_worker_sends_renders_and_schedules_the_followup(pool: PgPool) {
 
     assert_eq!(processed, 3);
 
-    let sent = mailer.sent.lock().unwrap();
+    let sent = mailer.sent.lock().unwrap().clone();
     assert_eq!(sent.len(), 3);
     let ada = sent
         .iter()
@@ -223,7 +228,9 @@ async fn the_worker_sends_renders_and_schedules_the_followup(pool: PgPool) {
         .expect("ada should have been mailed");
     assert_eq!(ada.1.subject, "Quick question, Ada");
     assert!(
-        ada.1.body.starts_with("Hi Ada, saw Analytical Engines is hiring."),
+        ada.1
+            .body
+            .starts_with("Hi Ada, saw Analytical Engines is hiring."),
         "body was {}",
         ada.1.body
     );
@@ -240,7 +247,10 @@ async fn the_worker_sends_renders_and_schedules_the_followup(pool: PgPool) {
     for row in &rows {
         assert_eq!(row.current_step, 1);
         assert_eq!(row.status, "pending");
-        assert!(row.thread_id.is_some(), "the thread must be kept for followups");
+        assert!(
+            row.thread_id.is_some(),
+            "the thread must be kept for followups"
+        );
         let due = row.next_run_at.expect("a followup must be scheduled");
         let expected = Utc::now() + ChronoDuration::days(3);
         assert!(
@@ -283,7 +293,11 @@ async fn a_lead_is_finished_after_the_last_step(pool: PgPool) {
     api::scheduler::enqueue_due(&pool).await.unwrap();
     work(&pool, &mailer).await;
 
-    assert_eq!(mailer.sent.lock().unwrap().len(), 6, "two steps to three leads");
+    assert_eq!(
+        mailer.sent.lock().unwrap().len(),
+        6,
+        "two steps to three leads"
+    );
 
     let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
     assert_eq!(stats.pending, 0);
@@ -327,7 +341,11 @@ async fn the_daily_cap_stops_the_mailbox(pool: PgPool) {
     api::scheduler::enqueue_due(&pool).await.unwrap();
     work(&pool, &mailer).await;
 
-    assert_eq!(mailer.sent.lock().unwrap().len(), 2, "the cap is a hard stop");
+    assert_eq!(
+        mailer.sent.lock().unwrap().len(),
+        2,
+        "the cap is a hard stop"
+    );
 
     // The third is retried later, not dropped or failed.
     let stats = campaigns::stats(&pool, org_id, campaign_id).await.unwrap();
@@ -344,7 +362,10 @@ async fn a_lead_missing_a_merge_value_is_never_mailed(pool: PgPool) {
     let org_id = seed_org(&pool, "Acme").await;
     // No Company column at all, and the first step's body requires {{company}}.
     let list_id = {
-        let list_id = leads::create_list(&pool, org_id, "Prospects").await.unwrap().id;
+        let list_id = leads::create_list(&pool, org_id, "Prospects")
+            .await
+            .unwrap()
+            .id;
         leads::import_csv(
             &pool,
             org_id,
@@ -393,7 +414,10 @@ async fn a_lead_missing_a_merge_value_is_never_mailed(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    assert!(error.contains("company"), "the error must name the tag: {error}");
+    assert!(
+        error.contains("company"),
+        "the error must name the tag: {error}"
+    );
 }
 
 #[sqlx::test]
@@ -413,7 +437,9 @@ async fn unsubscribing_after_scheduling_cancels_the_send(pool: PgPool) {
     let sent = mailer.sent.lock().unwrap();
     assert_eq!(sent.len(), 2);
     assert!(
-        !sent.iter().any(|(_, message)| message.to == "ada@example.com"),
+        !sent
+            .iter()
+            .any(|(_, message)| message.to == "ada@example.com"),
         "a queued job must not outrun an unsubscribe"
     );
 }
@@ -429,8 +455,22 @@ async fn two_workers_never_send_the_same_email_twice(pool: PgPool) {
 
     let cipher = cipher();
     let (a, b) = tokio::join!(
-        api::worker::run_once(&pool, &cipher, &NeverRefreshes, first.as_ref(), "worker-a", 10),
-        api::worker::run_once(&pool, &cipher, &NeverRefreshes, second.as_ref(), "worker-b", 10),
+        api::worker::run_once(
+            &pool,
+            &cipher,
+            &NeverRefreshes,
+            first.as_ref(),
+            "worker-a",
+            10
+        ),
+        api::worker::run_once(
+            &pool,
+            &cipher,
+            &NeverRefreshes,
+            second.as_ref(),
+            "worker-b",
+            10
+        ),
     );
 
     assert_eq!(a.unwrap() + b.unwrap(), 3);
@@ -663,7 +703,10 @@ async fn a_bounce_stops_the_lead_and_suppresses_the_address(pool: PgPool) {
     let reader = FakeInbox::with(vec![inbound(
         &thread,
         "mailer-daemon@googlemail.com",
-        &[("Content-Type", "multipart/report; report-type=delivery-status")],
+        &[(
+            "Content-Type",
+            "multipart/report; report-type=delivery-status",
+        )],
     )]);
     let report = sync(&pool, org_id, &reader).await;
 
@@ -708,7 +751,11 @@ async fn the_sync_resumes_from_where_it_stopped(pool: PgPool) {
 
     let reader = FakeInbox::with(vec![]);
     sync(&pool, org_id, &reader).await;
-    assert_eq!(*reader.seen_cursor.lock().unwrap(), None, "first sync has no cursor");
+    assert_eq!(
+        *reader.seen_cursor.lock().unwrap(),
+        None,
+        "first sync has no cursor"
+    );
 
     sync(&pool, org_id, &reader).await;
     assert_eq!(
@@ -735,10 +782,11 @@ async fn one_orgs_sync_cannot_touch_another_orgs_campaign(pool: PgPool) {
             .is_err()
     );
 
-    let replied = sqlx::query_scalar!("select count(*) from campaign_leads where status = 'replied'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let replied =
+        sqlx::query_scalar!("select count(*) from campaign_leads where status = 'replied'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(replied, Some(0));
 }
 
@@ -753,7 +801,10 @@ async fn a_mailbox_is_claimed_for_sync_by_one_worker_only(pool: PgPool) {
         api::sync::claim_due_mailboxes(&pool, chrono::Duration::minutes(2)),
     );
     let claimed = first.unwrap().len() + second.unwrap().len();
-    assert_eq!(claimed, 1, "two workers must not sync the same mailbox at once");
+    assert_eq!(
+        claimed, 1,
+        "two workers must not sync the same mailbox at once"
+    );
 
     // Not due again until the interval passes.
     assert!(
@@ -853,8 +904,8 @@ async fn a_job_that_keeps_being_abandoned_eventually_fails(pool: PgPool) {
 }
 
 use api::provider::MailerError;
-use support::FailingMailer;
 use std::sync::atomic::Ordering;
+use support::FailingMailer;
 
 #[sqlx::test]
 async fn being_rate_limited_waits_without_spending_an_attempt(pool: PgPool) {
@@ -884,9 +935,13 @@ async fn being_rate_limited_waits_without_spending_an_attempt(pool: PgPool) {
         assert!(row.scheduled_at > Utc::now() + ChronoDuration::seconds(60));
     }
 
-    let stats = campaigns::stats(&pool, org_id, campaigns::list(&pool, org_id).await.unwrap()[0].id)
-        .await
-        .unwrap();
+    let stats = campaigns::stats(
+        &pool,
+        org_id,
+        campaigns::list(&pool, org_id).await.unwrap()[0].id,
+    )
+    .await
+    .unwrap();
     assert_eq!(stats.failed, 0);
 }
 

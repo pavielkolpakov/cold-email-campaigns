@@ -15,7 +15,10 @@ fn mapping() -> ColumnMapping {
 }
 
 async fn seed_list(pool: &PgPool, org_id: Uuid) -> Uuid {
-    leads::create_list(pool, org_id, "Q4 prospects").await.unwrap().id
+    leads::create_list(pool, org_id, "Q4 prospects")
+        .await
+        .unwrap()
+        .id
 }
 
 #[sqlx::test]
@@ -112,7 +115,12 @@ async fn leads_and_lists_do_not_cross_org_boundaries(pool: PgPool) {
         .unwrap();
 
     // Globex holds a valid list id of Acme's — it must still see nothing.
-    assert!(leads::list(&pool, globex, acme_list).await.unwrap().is_empty());
+    assert!(
+        leads::list(&pool, globex, acme_list)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(leads::lists(&pool, globex).await.unwrap().is_empty());
     assert_eq!(leads::lists(&pool, acme).await.unwrap().len(), 1);
 

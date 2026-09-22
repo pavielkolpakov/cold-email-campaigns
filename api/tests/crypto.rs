@@ -23,7 +23,10 @@ fn the_same_secret_encrypts_differently_every_time() {
 
     assert_ne!(first, second, "a reused nonce would break AES-GCM");
     assert!(!first.contains("RefreshToken"));
-    assert_eq!(cipher.decrypt(&first).unwrap(), cipher.decrypt(&second).unwrap());
+    assert_eq!(
+        cipher.decrypt(&first).unwrap(),
+        cipher.decrypt(&second).unwrap()
+    );
 }
 
 #[test]

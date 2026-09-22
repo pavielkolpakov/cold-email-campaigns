@@ -93,7 +93,10 @@ async fn accept(
 
     let session =
         crate::auth::create_session(&state.pool, user_id, state.config.session_ttl_days).await?;
-    let jar = jar.add(crate::auth::session_cookie(&state.config, session.to_string()));
+    let jar = jar.add(crate::auth::session_cookie(
+        &state.config,
+        session.to_string(),
+    ));
 
     Ok((jar, Json(json!({ "ok": true }))))
 }

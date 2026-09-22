@@ -179,7 +179,10 @@ async fn a_transient_refresh_failure_leaves_the_mailbox_active(pool: PgPool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(status, "active", "google being down is not the user's problem");
+    assert_eq!(
+        status, "active",
+        "google being down is not the user's problem"
+    );
 }
 
 use support::FakeMailer;

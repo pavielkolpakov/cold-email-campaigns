@@ -24,10 +24,13 @@ pub async fn create(
     if !email.contains('@') {
         return Err(anyhow!("a valid email is required"));
     }
-    if sqlx::query_scalar!("select exists (select 1 from users where lower(email) = $1)", email)
-        .fetch_one(pool)
-        .await?
-        .unwrap_or(false)
+    if sqlx::query_scalar!(
+        "select exists (select 1 from users where lower(email) = $1)",
+        email
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(false)
     {
         return Err(anyhow!("that email already has an account"));
     }

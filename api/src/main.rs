@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use api::crypto::Cipher;
 use api::provider::gmail::{GmailInbox, GmailMailer, GmailOAuth};
 use api::{config, routes, scheduler, seed, state, worker};
-use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]

@@ -28,7 +28,9 @@ use crate::auth::{
 use crate::error::{AppError, AppResult};
 
 pub async fn health(State(state): State<AppState>) -> AppResult<Json<Value>> {
-    sqlx::query_scalar!("select 1").fetch_one(&state.pool).await?;
+    sqlx::query_scalar!("select 1")
+        .fetch_one(&state.pool)
+        .await?;
     Ok(Json(json!({ "status": "ok" })))
 }
 
@@ -169,7 +171,10 @@ async fn login(
     ))
 }
 
-async fn logout(State(state): State<AppState>, jar: CookieJar) -> AppResult<(CookieJar, Json<Value>)> {
+async fn logout(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> AppResult<(CookieJar, Json<Value>)> {
     if let Some(cookie) = jar.get(&state.config.session_cookie_name)
         && let Ok(session_id) = Uuid::parse_str(cookie.value())
     {
@@ -187,7 +192,10 @@ const GOOGLE_STATE_COOKIE: &str = "ce_google_sign_in_state";
 
 /// Starts Google sign-in. As with connecting a mailbox, the `state` round-trip
 /// is checked against a cookie so a callback cannot be forged.
-async fn google_authorize(State(state): State<AppState>, jar: CookieJar) -> AppResult<(CookieJar, Redirect)> {
+async fn google_authorize(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> AppResult<(CookieJar, Redirect)> {
     if !state.config.google_configured() {
         return Err(AppError::BadRequest(
             "google oauth is not configured on this server".into(),
@@ -226,7 +234,9 @@ async fn google_callback(
     let mut cleared = Cookie::new(GOOGLE_STATE_COOKIE, "");
     cleared.set_path("/");
     cleared.set_max_age(time::Duration::ZERO);
-    let expected = jar.get(GOOGLE_STATE_COOKIE).map(|cookie| cookie.value().to_string());
+    let expected = jar
+        .get(GOOGLE_STATE_COOKIE)
+        .map(|cookie| cookie.value().to_string());
     let jar = jar.add(cleared);
 
     let login = format!("{}/login", state.config.app_url);

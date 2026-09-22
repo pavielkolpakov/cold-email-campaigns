@@ -32,15 +32,26 @@ async fn an_accepted_invite_joins_the_inviting_org_as_a_member(pool: PgPool) {
         .unwrap();
     assert_eq!(invite.email, "grace@acme.com");
 
-    let user_id = invites::accept(&pool, &invite.token.to_string(), "Grace", "correct-horse-battery")
-        .await
-        .unwrap();
+    let user_id = invites::accept(
+        &pool,
+        &invite.token.to_string(),
+        "Grace",
+        "correct-horse-battery",
+    )
+    .await
+    .unwrap();
 
-    let user = sqlx::query!("select org_id, email, role from users where id = $1", user_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(user.org_id, org_id, "an invite decides the org, not the joiner");
+    let user = sqlx::query!(
+        "select org_id, email, role from users where id = $1",
+        user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        user.org_id, org_id,
+        "an invite decides the org, not the joiner"
+    );
     assert_eq!(user.email, "grace@acme.com");
     assert_eq!(user.role, "member");
 }
@@ -79,9 +90,14 @@ async fn an_expired_invite_is_refused(pool: PgPool) {
         .unwrap();
 
     assert!(
-        invites::accept(&pool, &invite.token.to_string(), "Grace", "correct-horse-battery")
-            .await
-            .is_err()
+        invites::accept(
+            &pool,
+            &invite.token.to_string(),
+            "Grace",
+            "correct-horse-battery"
+        )
+        .await
+        .is_err()
     );
 }
 
@@ -100,7 +116,10 @@ async fn an_invite_cannot_be_revoked_by_another_org(pool: PgPool) {
 
 #[sqlx::test]
 async fn only_an_owner_can_invite(pool: PgPool) {
-    let app = support::test_app(pool.clone(), std::sync::Arc::new(support::FakeMailer::default()));
+    let app = support::test_app(
+        pool.clone(),
+        std::sync::Arc::new(support::FakeMailer::default()),
+    );
 
     // Signing up makes an owner; they invite a member.
     let signup = app
@@ -153,7 +172,9 @@ async fn only_an_owner_can_invite(pool: PgPool) {
     let member_id = invites::accept(&pool, &token, "Grace", "correct-horse-battery")
         .await
         .unwrap();
-    let session = api::auth::create_session(&pool, member_id, 30).await.unwrap();
+    let session = api::auth::create_session(&pool, member_id, 30)
+        .await
+        .unwrap();
 
     // The member tries to invite someone else.
     let refused = app

@@ -136,7 +136,11 @@ impl GmailOAuth {
     }
 
     /// Trades the one-time code from the callback for tokens.
-    pub async fn exchange_code(&self, code: &str, redirect_uri: &str) -> anyhow::Result<Credentials> {
+    pub async fn exchange_code(
+        &self,
+        code: &str,
+        redirect_uri: &str,
+    ) -> anyhow::Result<Credentials> {
         let token = self.code_tokens(code, redirect_uri).await?;
         let refresh_token = token.refresh_token.ok_or_else(|| {
             anyhow!("google did not return a refresh token; the account must be disconnected in its google security settings and reconnected")
@@ -150,7 +154,11 @@ impl GmailOAuth {
     }
 
     /// Trades a sign-in code for the profile of the person who granted it.
-    pub async fn sign_in_profile(&self, code: &str, redirect_uri: &str) -> anyhow::Result<GoogleProfile> {
+    pub async fn sign_in_profile(
+        &self,
+        code: &str,
+        redirect_uri: &str,
+    ) -> anyhow::Result<GoogleProfile> {
         let token = self.code_tokens(code, redirect_uri).await?;
         self.profile(&token.access_token).await
     }

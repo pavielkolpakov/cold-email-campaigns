@@ -50,10 +50,10 @@ fn is_bounce(message: &InboundMessage) -> bool {
 
 fn is_auto_reply(message: &InboundMessage) -> bool {
     // RFC 3834 plus the informal headers that predate it and are still common.
-    if let Some(value) = header(message, "auto-submitted") {
-        if value != "no" {
-            return true;
-        }
+    if let Some(value) = header(message, "auto-submitted")
+        && value != "no"
+    {
+        return true;
     }
     if header(message, "x-autoreply").is_some() || header(message, "x-autorespond").is_some() {
         return true;

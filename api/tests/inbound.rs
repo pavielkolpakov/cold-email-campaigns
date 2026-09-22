@@ -45,7 +45,10 @@ fn an_out_of_office_is_not_a_reply() {
 
 #[test]
 fn a_delivery_failure_is_a_bounce() {
-    let mut bounce = message(&[("Content-Type", "multipart/report; report-type=delivery-status")]);
+    let mut bounce = message(&[(
+        "Content-Type",
+        "multipart/report; report-type=delivery-status",
+    )]);
     bounce.from = "mailer-daemon@googlemail.com".into();
 
     assert_eq!(inbound::classify(&bounce), Classification::Bounce);
@@ -66,7 +69,10 @@ fn a_bounce_beats_an_auto_reply_header() {
     // Bounces often carry Auto-Submitted too; the failure is the important part.
     let mut bounce = message(&[
         ("Auto-Submitted", "auto-replied"),
-        ("Content-Type", "multipart/report; report-type=delivery-status"),
+        (
+            "Content-Type",
+            "multipart/report; report-type=delivery-status",
+        ),
     ]);
     bounce.from = "MAILER-DAEMON@googlemail.com".into();
 

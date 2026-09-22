@@ -17,8 +17,11 @@ fn merge_tags_are_replaced_with_lead_values() {
 
 #[test]
 fn a_fallback_fills_in_for_a_missing_value() {
-    let rendered = render::render("Hi {{first_name|there}} at {{industry|your company}}", &values())
-        .unwrap();
+    let rendered = render::render(
+        "Hi {{first_name|there}} at {{industry|your company}}",
+        &values(),
+    )
+    .unwrap();
 
     assert_eq!(rendered, "Hi Ada at your company");
 }
@@ -38,7 +41,11 @@ fn a_missing_value_with_no_fallback_refuses_to_render() {
 
     let error = render::render("Hi {{first_name}} at {{company}}", &values).unwrap_err();
 
-    assert_eq!(error, vec!["first_name"], "sending `Hi  at ...` is worse than not sending");
+    assert_eq!(
+        error,
+        vec!["first_name"],
+        "sending `Hi  at ...` is worse than not sending"
+    );
 }
 
 #[test]

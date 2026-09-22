@@ -43,7 +43,9 @@ async fn create_sequence(
         return Err(AppError::BadRequest("a sequence name is required".into()));
     }
     if body.steps.is_empty() {
-        return Err(AppError::BadRequest("a sequence needs at least one step".into()));
+        return Err(AppError::BadRequest(
+            "a sequence needs at least one step".into(),
+        ));
     }
     if body.steps[0].subject.trim().is_empty() {
         return Err(AppError::BadRequest(
@@ -57,7 +59,10 @@ async fn create_sequence(
     Ok(Json(json!({ "sequence": sequence })))
 }
 
-async fn list_sequences(State(state): State<AppState>, user: CurrentUser) -> AppResult<Json<Value>> {
+async fn list_sequences(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> AppResult<Json<Value>> {
     let sequences = sequences::list(&state.pool, user.org_id)
         .await
         .map_err(AppError::Internal)?;
@@ -86,7 +91,10 @@ async fn create_campaign(
     Ok(Json(json!({ "campaign": campaign })))
 }
 
-async fn list_campaigns(State(state): State<AppState>, user: CurrentUser) -> AppResult<Json<Value>> {
+async fn list_campaigns(
+    State(state): State<AppState>,
+    user: CurrentUser,
+) -> AppResult<Json<Value>> {
     let campaigns = campaigns::list(&state.pool, user.org_id)
         .await
         .map_err(AppError::Internal)?;

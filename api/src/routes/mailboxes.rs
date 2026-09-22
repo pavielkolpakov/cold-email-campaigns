@@ -1,8 +1,8 @@
+use axum::Json;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{delete, get, post};
-use axum::Json;
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -122,7 +122,10 @@ async fn callback(
     cleared.set_path("/");
     cleared.set_max_age(time::Duration::ZERO);
 
-    Ok((jar.add(cleared), Redirect::to(&format!("{settings}?connected=1"))))
+    Ok((
+        jar.add(cleared),
+        Redirect::to(&format!("{settings}?connected=1")),
+    ))
 }
 
 async fn send_test(

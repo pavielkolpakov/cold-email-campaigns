@@ -145,7 +145,9 @@ pub async fn import_csv(
     .await?
     .unwrap_or(false);
     if !owned {
-        return Err(anyhow!("lead list {list_id} does not belong to this organization"));
+        return Err(anyhow!(
+            "lead list {list_id} does not belong to this organization"
+        ));
     }
 
     let mut reader = csv::Reader::from_reader(csv_bytes);
